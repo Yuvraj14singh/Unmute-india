@@ -12,3 +12,9 @@ def compact_count(value):
 
 def request_fingerprint(value, secret):
     return hashlib.sha256(f'{secret}:{value}'.encode()).hexdigest() if value else ''
+
+def mask_email(value):
+    local, separator, domain = (value or '').strip().partition('@')
+    if not separator: return 'your email address'
+    visible = local[:2] if len(local) > 2 else local[:1]
+    return f'{visible}{"*" * max(4, len(local) - len(visible))}@{domain}'

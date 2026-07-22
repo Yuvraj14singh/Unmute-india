@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.core import mail
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from unittest.mock import patch
 from .forms import PetitionSignatureForm
 from .models import ListeningRequest, Petition, PetitionSignature, PublicQuestion, Story
@@ -94,6 +95,31 @@ class PetitionSystemTests(TestCase):
         self.client.session.flush()
         duplicate=self.client.post(url,data).json()
         self.assertTrue(duplicate['duplicate'])
+
+    def test_expired_token_fails_safely(self):
+        import hashlib
+        raw = 'expired-secure-token'
+        signature = PetitionSignature.objects.create(petition=self.petition,name='Student',email='expired@example.com',supporter_type='student',consent=True,verification_token=hashlib.sha256(raw.encode()).hexdigest(),token_created_at=timezone.now()-timezone.timedelta(hours=25))
+        response = self.client.get(reverse('petition_verify', args=[raw]))
+        self.assertContains(response, 'expired')
+        signature.refresh_from_db(); self.assertFalse(signature.is_verified)
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    def test_resend_rotates_token_and_obscures_unknown_email(self):
+        url = reverse('petition_detail', args=[self.petition.slug])
+        self.client.post(url, {'name':'Student','email':'rotate@example.com','supporter_type':'student','consent':'on'})
+        signature = PetitionSignature.objects.get(email='rotate@example.com')
+        old = mail.outbox[-1].body.split('/petitions/verify/')[1].split('/')[0]
+        signature.resend_available_at = timezone.now()-timezone.timedelta(seconds=1); signature.save(update_fields=['resend_available_at'])
+        response = self.client.post(reverse('petition_resend', args=[self.petition.slug]), {'email':'rotate@example.com'})
+        self.assertTrue(response.json()['ok'])
+        new = mail.outbox[-1].body.split('/petitions/verify/')[1].split('/')[0]
+        self.assertNotEqual(old, new)
+        self.assertContains(self.client.get(reverse('petition_verify', args=[old])), 'invalid')
+        self.assertContains(self.client.get(reverse('petition_verify', args=[new])), 'now verified')
+        unknown = self.client.post(reverse('petition_resend', args=[self.petition.slug]), {'email':'unknown@example.com'})
+        self.assertEqual(unknown.status_code, 200)
+        self.assertNotContains(unknown, 'not found')
 
     def test_spam_and_removed_signatures_do_not_count(self):
         PetitionSignature.objects.create(petition=self.petition,name='Spam',email='spam@example.com',supporter_type='citizen',consent=True,is_verified=True,moderation_status='spam')

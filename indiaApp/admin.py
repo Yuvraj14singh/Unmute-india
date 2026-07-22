@@ -35,16 +35,20 @@ class PetitionAdmin(admin.ModelAdmin):
 
 @admin.register(PetitionSignature)
 class PetitionSignatureAdmin(admin.ModelAdmin):
-    list_display=('name','email','supporter_type','petition','is_verified','moderation_status','verified_at','created_at')
+    list_display=('name','masked_email','supporter_type','petition','is_verified','verification_email_attempts','verification_email_failures','moderation_status','verified_at','created_at')
     list_filter=('petition','is_verified','moderation_status','supporter_type')
     search_fields=('name','email','normalized_email')
-    readonly_fields=('normalized_email','verification_token','token_created_at','is_verified','verified','verified_at','ip_hash','user_agent_hash','created_at','updated_at')
+    readonly_fields=('normalized_email','verification_token','token_created_at','verification_email_sent_at','verification_email_attempts','verification_email_failures','duplicate_attempts','resend_available_at','is_verified','verified','verified_at','ip_hash','user_agent_hash','created_at','updated_at')
     actions=('mark_valid','mark_spam','reject_signatures','remove_signatures','export_verified')
     def _moderate(self,request,queryset,status):
         count=queryset.update(moderation_status=status)
         AuditLog.objects.create(actor=request.user,action=f'Marked {count} signatures {status}',object_reference='PetitionSignature bulk action')
     @admin.action(description='Mark selected signatures valid')
     def mark_valid(self,request,queryset): self._moderate(request,queryset,'valid')
+    @admin.display(description='Protected email')
+    def masked_email(self,obj):
+        from .utils import mask_email
+        return mask_email(obj.email)
     @admin.action(description='Mark selected signatures as spam')
     def mark_spam(self,request,queryset): self._moderate(request,queryset,'spam')
     @admin.action(description='Reject selected signatures')
@@ -52,7 +56,7 @@ class PetitionSignatureAdmin(admin.ModelAdmin):
     @admin.action(description='Remove selected signatures')
     def remove_signatures(self,request,queryset):
         from django.utils import timezone
-        count=queryset.update(moderation_status='removed',removed_at=timezone.now())
+        count=queryset.update(moderation_status='removed',is_removed=True,removed_at=timezone.now())
         AuditLog.objects.create(actor=request.user,action=f'Removed {count} signatures',object_reference='PetitionSignature bulk action')
     @admin.action(description='Export selected verified signatures as CSV')
     def export_verified(self,request,queryset):

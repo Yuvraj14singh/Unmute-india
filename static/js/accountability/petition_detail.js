@@ -8,6 +8,7 @@ if (form) {
   const button = form.querySelector('[type=submit]');
   const response = form.querySelector('.form-response');
   const csrf = form.querySelector('[name=csrfmiddlewaretoken]').value;
+  let sending = false;
   const validEmail = value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
   const showError = (field, message) => {
     const target = form.querySelector(`[data-error="${field}"]`);
@@ -28,30 +29,45 @@ if (form) {
   form.addEventListener('change', () => validate());
   form.addEventListener('submit', async event => {
     event.preventDefault();
-    if (!validate(true)) return;
+    if (sending || !validate(true)) return;
+    sending = true;
     button.disabled = true;
-    button.textContent = 'Sending Confirmation…';
+    button.textContent = 'Sending verification email…';
     response.className = 'form-response';
+    const submittedEmail = email.value.trim();
     try {
       const result = await fetch(location.href, {method: 'POST', body: new FormData(form), headers: {'X-Requested-With': 'XMLHttpRequest'}});
       const data = await result.json();
-      response.textContent = data.message || 'Please check the form and try again.';
+      response.textContent = data.ok
+        ? `Check your inbox.\n\nWe sent a verification link to ${data.masked_email}. Your support will be counted after you verify your email.`
+        : (data.message || 'Please check the form and try again.');
       response.className = `form-response show${data.ok ? '' : ' error'}`;
       if (data.ok) {
         button.textContent = 'Check Your Email';
         form.reset();
+        const resend = document.createElement('button'); resend.type = 'button'; resend.className = 'resend-link';
+        let remaining = Number(data.cooldown_seconds || 300);
+        const paint = () => { resend.disabled = remaining > 0; resend.textContent = remaining > 0 ? `Resend available in ${Math.ceil(remaining / 60)} min` : 'Resend Verification Email'; };
+        paint(); const timer = setInterval(() => { remaining -= 1; paint(); if (remaining <= 0) clearInterval(timer); }, 1000);
+        resend.addEventListener('click', async () => { resend.disabled = true; resend.textContent = 'Sending…'; const payload = new FormData(); payload.append('email', submittedEmail); payload.append('csrfmiddlewaretoken', csrf); const sent = await fetch(data.resend_url, {method:'POST',body:payload}); const sentData = await sent.json(); response.firstChild.textContent = sentData.message; remaining = Number(sentData.cooldown_seconds || 300); paint(); });
+        const back = document.createElement('a'); back.href = '#support'; back.textContent = 'Back to petition'; back.className = 'resend-link';
+        response.append(document.createElement('br'), resend, ' ', back);
       } else {
         button.textContent = 'Add My Support';
         validate();
         if (data.pending && data.resend_url) {
           const pendingEmail = email.value.trim();
           const resend = document.createElement('button');
-          resend.type = 'button'; resend.className = 'resend-link'; resend.textContent = 'Resend Verification Email';
+          resend.type = 'button'; resend.className = 'resend-link';
+          let remaining = Number(data.cooldown_seconds || 0);
+          const paint = () => { resend.disabled = remaining > 0; resend.textContent = remaining > 0 ? `Resend available in ${Math.ceil(remaining / 60)} min` : 'Resend Verification Email'; };
+          paint(); const timer = remaining > 0 ? setInterval(() => { remaining -= 1; paint(); if (remaining <= 0) clearInterval(timer); }, 1000) : null;
           resend.addEventListener('click', async () => {
             resend.disabled = true; resend.textContent = 'Sending…';
             const payload = new FormData(); payload.append('email', pendingEmail); payload.append('csrfmiddlewaretoken', csrf);
             const sent = await fetch(data.resend_url, {method: 'POST', body: payload});
-            const sentData = await sent.json(); response.textContent = sentData.message; resend.remove();
+            const sentData = await sent.json(); response.textContent = sentData.message;
+            if (sentData.ok) resend.remove(); else { remaining = Number(sentData.cooldown_seconds || 0); paint(); }
           });
           response.append(document.createElement('br'), resend);
         }
@@ -60,7 +76,7 @@ if (form) {
       response.textContent = 'We could not submit this right now. Please try again.';
       response.className = 'form-response show error';
       button.textContent = 'Add My Support'; validate();
-    }
+    } finally { sending = false; }
   });
   validate();
 }

@@ -1,0 +1,22 @@
+One final step to count your support.
+
+Hi {{ supporter_name }},
+
+Thank you for standing with students.
+
+You added your support to:
+“{{ petition_title }}”
+
+Please verify your email address to confirm that this support came from you.
+Your support will be added to the verified supporter count only after you complete this verification.
+
+Verify My Support:
+{{ verification_url }}
+
+This secure verification link expires in 24 hours and can be used only once.
+Your email address remains private and will not be displayed publicly.
+
+If you did not add your support to this petition, you can safely ignore this email.
+
+With solidarity,
+Unmute India Team

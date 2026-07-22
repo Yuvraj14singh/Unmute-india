@@ -206,7 +206,8 @@ EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() in ('1','true','
 EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False').lower() in ('1','true','yes')
 EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '20'))
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'Unmute India <noreply@localhost>')
-PETITION_VERIFICATION_EXPIRY_HOURS = int(os.environ.get('PETITION_VERIFICATION_EXPIRY_HOURS', '48'))
+PETITION_VERIFICATION_EXPIRY_HOURS = int(os.environ.get('PETITION_VERIFICATION_EXPIRY_HOURS', '24'))
+SITE_URL = os.environ.get('SITE_URL', '').rstrip('/')
 
 if EMAIL_HOST == 'smtp.gmail.com':
     # Google displays app passwords grouped with spaces. SMTP expects the raw
