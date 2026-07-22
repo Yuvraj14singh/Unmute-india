@@ -232,6 +232,12 @@ SITE_URL = os.environ.get(
     'SITE_URL',
     f'https://{render_hostname}' if render_hostname else 'http://127.0.0.1:8000',
 ).rstrip('/')
+TURNSTILE_TEST_MODE = DEBUG and os.environ.get('TURNSTILE_USE_TEST_KEYS', 'False').strip().lower() in ('1', 'true', 'yes')
+if TURNSTILE_TEST_MODE:
+    # Official Cloudflare dummy keys: valid on localhost/127.0.0.1 only because
+    # this branch is impossible when DEBUG=False.
+    TURNSTILE_SITE_KEY = '1x00000000000000000000AA'
+    TURNSTILE_SECRET_KEY = '1x0000000000000000000000000000000AA'
 
 if EMAIL_HOST == 'smtp.gmail.com':
     # Google displays app passwords grouped with spaces. SMTP expects the raw

@@ -20,7 +20,7 @@ No Google client secret is needed for this Google Identity Services ID-token flo
 3. Copy the site key into Render as `TURNSTILE_SITE_KEY`.
 4. Copy the secret key into Render as `TURNSTILE_SECRET_KEY`.
 
-Cloudflare publishes test keys for local automated/manual development. Use them only in an explicit local `DEBUG=True` environment; production never bypasses either verification provider.
+For localhost, set `TURNSTILE_USE_TEST_KEYS=True` while `DEBUG=True`. The project then uses Cloudflare's official dummy keys, which work on `localhost` and `127.0.0.1`. Production ignores this mode because it is disabled whenever `DEBUG=False`.
 
 ## Render environment variables
 

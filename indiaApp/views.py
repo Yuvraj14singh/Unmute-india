@@ -23,6 +23,15 @@ logger = logging.getLogger(__name__)
 GOOGLE_SUPPORT_UNAVAILABLE = 'Verified support is temporarily unavailable.'
 
 
+def _missing_google_support_settings():
+    values = {
+        'GOOGLE_CLIENT_ID': settings.GOOGLE_CLIENT_ID,
+        'TURNSTILE_SITE_KEY': settings.TURNSTILE_SITE_KEY,
+        'TURNSTILE_SECRET_KEY': settings.TURNSTILE_SECRET_KEY,
+    }
+    return [name for name, value in values.items() if not value]
+
+
 def _verify_turnstile(token, remote_ip=''):
     payload = {'secret': settings.TURNSTILE_SECRET_KEY, 'response': token}
     if remote_ip:
@@ -39,7 +48,7 @@ def _verify_turnstile(token, remote_ip=''):
         raise ValueError('turnstile_invalid')
     expected_host = parse.urlparse(settings.SITE_URL).hostname
     returned_host = result.get('hostname')
-    if expected_host and returned_host and returned_host != expected_host:
+    if not settings.TURNSTILE_TEST_MODE and expected_host and returned_host and returned_host != expected_host:
         raise ValueError('turnstile_hostname')
     return {'hostname': returned_host or '', 'action': result.get('action', '')}
 
@@ -162,9 +171,10 @@ def petition_detail(request, slug):
     related = Petition.objects.filter(petition_status='published').exclude(pk=petition.pk)[:3]
     canonical_url = request.build_absolute_uri(petition.get_absolute_url())
     social_image_url = request.build_absolute_uri(petition.cover_image.url) if petition.cover_image else ''
-    verification_available = bool(settings.GOOGLE_CLIENT_ID and settings.TURNSTILE_SITE_KEY and settings.TURNSTILE_SECRET_KEY)
+    missing_verification_settings = _missing_google_support_settings()
+    verification_available = not missing_verification_settings
     if not verification_available:
-        logger.error('Google petition support disabled: required Google/Turnstile configuration is missing.')
+        logger.error('Google petition support disabled: missing environment variables: %s.', ', '.join(missing_verification_settings))
     return render(request, 'accountability/petition_detail.html', {'petition':petition,'form':form,'verified_count':petition.verified_count,'supporters':supporters,'related_petitions':related,'canonical_url':canonical_url,'social_image_url':social_image_url,'google_client_id':settings.GOOGLE_CLIENT_ID,'turnstile_site_key':settings.TURNSTILE_SITE_KEY,'verification_available':verification_available,'google_support_url':reverse('google_petition_support', args=[petition.slug])})
 
 
@@ -173,8 +183,9 @@ def google_petition_support(request, slug):
     petition = get_object_or_404(Petition, slug=slug, petition_status__in=['published','paused','closed'])
     if not petition.accepts_signatures:
         return JsonResponse({'ok':False,'message':'This petition is not accepting signatures.'}, status=400)
-    if not (settings.GOOGLE_CLIENT_ID and settings.TURNSTILE_SITE_KEY and settings.TURNSTILE_SECRET_KEY):
-        logger.error('Google petition support request rejected: verification configuration missing.')
+    missing_verification_settings = _missing_google_support_settings()
+    if missing_verification_settings:
+        logger.error('Google petition support request rejected: missing environment variables: %s.', ', '.join(missing_verification_settings))
         return JsonResponse({'ok':False,'message':GOOGLE_SUPPORT_UNAVAILABLE}, status=503)
     data = request.POST.copy()
     data['turnstile_token'] = request.POST.get('turnstile_token') or request.POST.get('cf-turnstile-response', '')
