@@ -88,7 +88,7 @@ if (petitionForm) {
   };
   const initialiseGoogle = () => {
     if (!window.google?.accounts?.id) return window.setTimeout(initialiseGoogle, 100);
-    window.google.accounts.id.initialize({client_id:clientId, callback:response => {
+    window.google.accounts.id.initialize({client_id:clientId, ux_mode:'popup', use_fedcm_for_button:true, callback:response => {
       guidance.textContent = 'Waiting for Google verification…';
       if (!response?.credential) {
         status.textContent = 'Google verification was not completed. You can try again.';
@@ -97,7 +97,10 @@ if (petitionForm) {
       }
       submitCredential(response.credential);
     }});
-    window.google.accounts.id.renderButton(googleShell, {theme:'outline', size:'large', type:'standard', shape:'pill', text:'continue_with', width:320});
+    window.google.accounts.id.renderButton(googleShell, {theme:'outline', size:'large', type:'standard', shape:'pill', text:'continue_with', width:320, click_listener:() => {
+      guidance.textContent = 'Waiting for Google verification…';
+      status.textContent = '';
+    }});
     googleReady = true;
     valid();
   };

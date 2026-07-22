@@ -11,6 +11,8 @@
    - `http://127.0.0.1:8000`
 5. Copy the web client ID into Render as `GOOGLE_CLIENT_ID`.
 
+Use an OAuth client whose application type is **Web application**. For production, the authorised JavaScript origin must be exactly `https://unmute-india.onrender.com` with no trailing path. Popup mode does not require a redirect URI.
+
 No Google client secret is needed for this Google Identity Services ID-token flow.
 
 ## Cloudflare Turnstile setup

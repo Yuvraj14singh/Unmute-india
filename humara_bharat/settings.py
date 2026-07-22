@@ -204,6 +204,9 @@ FILE_UPLOAD_PERMISSIONS = 0o640
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
 SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+# Google Identity Services popup must retain a safe opener channel so its
+# credential callback can return to the petition page.
+SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
