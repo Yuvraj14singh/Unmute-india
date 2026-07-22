@@ -189,8 +189,15 @@ def google_petition_support(request, slug):
         return JsonResponse({'ok':False,'message':GOOGLE_SUPPORT_UNAVAILABLE}, status=503)
     data = request.POST.copy()
     data['turnstile_token'] = request.POST.get('turnstile_token') or request.POST.get('cf-turnstile-response', '')
+    logger.info(
+        'Google petition support received petition=%s credential=%s turnstile=%s.',
+        petition.pk,
+        bool(request.POST.get('credential')),
+        bool(data['turnstile_token']),
+    )
     form = GooglePetitionSupportForm(data)
     if not form.is_valid():
+        logger.warning('Google petition support form rejected petition=%s fields=%s.', petition.pk, sorted(form.errors.keys()))
         return JsonResponse({'ok':False,'message':'Please complete every required field and security check.','errors':form.errors.get_json_data()}, status=400)
     try:
         turnstile = _verify_turnstile(form.cleaned_data['turnstile_token'], request.META.get('REMOTE_ADDR', ''))
@@ -200,9 +207,11 @@ def google_petition_support(request, slug):
     try:
         identity = _verify_google_credential(form.cleaned_data['credential'])
     except PermissionError:
+        logger.warning('Google credential rejected petition=%s reason=missing_verified_email.', petition.pk)
         return JsonResponse({'ok':False,'reset_turnstile':True,'message':'This Google account does not have a verified email.'}, status=400)
     except Exception as exc:
-        logger.warning('Google credential verification failed petition=%s type=%s.', petition.pk, type(exc).__name__)
+        reason = 'audience_mismatch' if 'audience' in str(exc).casefold() else 'invalid_or_expired'
+        logger.warning('Google credential verification failed petition=%s type=%s reason=%s.', petition.pk, type(exc).__name__, reason)
         return JsonResponse({'ok':False,'reset_turnstile':True,'message':'We could not verify this Google account. Please try again.'}, status=400)
     now = timezone.now()
     email = identity['email']
@@ -212,6 +221,7 @@ def google_petition_support(request, slug):
             if not duplicate:
                 duplicate = PetitionSignature.objects.select_for_update().filter(petition=petition, normalized_email=email, is_verified=True).first()
             if duplicate:
+                logger.info('Duplicate Google petition support prevented petition=%s signature=%s.', petition.pk, duplicate.pk)
                 PetitionSignature.objects.filter(pk=duplicate.pk).update(duplicate_attempts=F('duplicate_attempts') + 1)
                 AuditLog.objects.create(action='Duplicate Google support prevented', object_reference=f'PetitionSignature:{duplicate.pk}')
                 return JsonResponse({'ok':True,'duplicate':True,'message':'You have already added your verified support to this petition.','verified_count':petition.verified_count})

@@ -17,78 +17,110 @@ if (petitionForm) {
   const googleShell = petitionForm.querySelector('[data-google-button]');
   const guidance = petitionForm.querySelector('[data-guidance]');
   const status = petitionForm.querySelector('.form-response');
-  const detailsStep = document.querySelector('[data-step-details]');
-  const humanStep = document.querySelector('[data-step-human]');
-  const googleStep = document.querySelector('[data-step-google]');
+  const activeStep = document.querySelector('[data-active-step]');
+  const steps = {
+    details: document.querySelector('[data-step-details]'),
+    human: document.querySelector('[data-step-human]'),
+    google: document.querySelector('[data-step-google]'),
+  };
   const clientId = petitionForm.dataset.googleClientId;
   let submitting = false;
   let googleReady = false;
 
+  name.setAttribute('aria-describedby', 'name-error');
+  role.setAttribute('aria-describedby', 'role-error');
+  consent.setAttribute('aria-describedby', 'consent-error');
+
   const showError = (field, message) => {
     const target = petitionForm.querySelector(`[data-error="${field}"]`);
+    const control = field === 'name' ? name : field === 'supporter_type' ? role : field === 'consent' ? consent : null;
     if (target) target.textContent = message;
+    if (control) control.setAttribute('aria-invalid', String(Boolean(message)));
   };
-  const valid = (show = false) => {
-    const checks = {name: Boolean(name.value.trim()), supporter_type: Boolean(role.value), consent: consent.checked, turnstile_token: Boolean(petitionTurnstileToken)};
-    const detailsReady = checks.name && checks.supporter_type && checks.consent;
+
+  const state = () => ({
+    name: Boolean(name.value.trim()),
+    supporter_type: Boolean(role.value),
+    consent: consent.checked,
+    turnstile_token: Boolean(petitionTurnstileToken),
+  });
+
+  const validate = (show = false) => {
+    const checks = state();
+    const detailsComplete = checks.name && checks.supporter_type && checks.consent;
+    const ready = detailsComplete && checks.turnstile_token && googleReady && !submitting;
+
     if (show) {
       showError('name', checks.name ? '' : 'Please enter your name.');
-      showError('supporter_type', checks.supporter_type ? '' : 'Select your role.');
+      showError('supporter_type', checks.supporter_type ? '' : 'Please select your role.');
       showError('consent', checks.consent ? '' : 'Please confirm your consent.');
-      showError('turnstile_token', checks.turnstile_token ? '' : 'Complete the security check.');
+      showError('turnstile_token', checks.turnstile_token ? '' : 'Please complete the human check.');
     }
-    const ready = Object.values(checks).every(Boolean) && googleReady && !submitting;
+
+    steps.details?.classList.toggle('is-complete', detailsComplete);
+    steps.human?.classList.toggle('is-complete', checks.turnstile_token);
+    steps.google?.classList.toggle('is-active', detailsComplete && checks.turnstile_token);
     googleShell.classList.toggle('is-disabled', !ready);
     googleShell.setAttribute('aria-disabled', String(!ready));
-    detailsStep?.classList.toggle('is-complete', detailsReady);
-    humanStep?.classList.toggle('is-complete', checks.turnstile_token);
-    detailsStep?.querySelector('small')?.replaceChildren(detailsReady ? 'Complete' : 'Pending');
-    humanStep?.querySelector('small')?.replaceChildren(checks.turnstile_token ? 'Complete' : 'Pending');
-    googleStep?.classList.toggle('is-ready', ready);
-    googleStep?.querySelector('small')?.replaceChildren(ready ? 'Ready' : 'Not counted yet');
-    if (!checks.name) guidance.textContent = 'Enter your name to begin.';
-    else if (!checks.supporter_type) guidance.textContent = 'Select your role.';
-    else if (!checks.consent) guidance.textContent = 'Confirm your consent to continue.';
-    else if (!checks.turnstile_token) guidance.textContent = 'Complete the human check.';
-    else if (!googleReady) guidance.textContent = 'Loading secure Google verification…';
-    else guidance.textContent = 'Ready — continue with Google to add your support.';
+
+    if (!detailsComplete) {
+      activeStep.textContent = 'Complete your details';
+      guidance.textContent = 'Complete your details first.';
+    } else if (!checks.turnstile_token) {
+      activeStep.textContent = 'Complete human check';
+      guidance.textContent = 'Complete the human check to continue.';
+    } else if (!googleReady) {
+      activeStep.textContent = 'Loading Google verification';
+      guidance.textContent = 'Loading secure Google verification…';
+    } else {
+      activeStep.textContent = 'Verify with Google';
+      guidance.textContent = 'Continue with Google to add your support.';
+    }
     return ready;
   };
+
   const resetTurnstile = () => {
     petitionTurnstileToken = '';
     if (window.turnstile) window.turnstile.reset();
-    valid();
+    validate();
   };
+
   const renderSuccess = data => {
     petitionForm.hidden = true;
+    document.querySelector('.support-progress')?.setAttribute('hidden', '');
+    activeStep?.setAttribute('hidden', '');
     const panel = document.querySelector('[data-verified-success]');
     panel.hidden = false;
-    panel.querySelector('[data-success-petition]').textContent = data.petition_title || document.title.split('|')[0].trim();
-    panel.querySelector('[data-success-count]').textContent = `${data.verified_count} verified supporters`;
+    panel.querySelector('[data-success-petition]').textContent = data.petition_title || '';
+    panel.querySelector('[data-success-count]').textContent = `${data.verified_count} verified supporter${data.verified_count === 1 ? '' : 's'}`;
     panel.querySelector('[data-success-role]').textContent = data.role || 'Verified supporter';
     document.querySelector('[data-signature-count]').textContent = data.verified_count;
     document.querySelector('[data-signature-label]').textContent = `${data.verified_count} verified supporter${data.verified_count === 1 ? '' : 's'}`;
   };
+
   const submitCredential = async credential => {
-    if (submitting || !valid(true)) return;
+    if (submitting || !validate(true)) return;
     submitting = true;
     googleShell.classList.add('is-disabled');
-    guidance.textContent = 'Verifying and adding your support…';
-    googleStep?.classList.add('is-working');
-    googleStep?.querySelector('small')?.replaceChildren('Verifying…');
+    guidance.textContent = 'Verifying your support…';
+    status.className = 'form-response';
     status.textContent = '';
     const payload = new FormData(petitionForm);
     payload.set('credential', credential);
     payload.set('turnstile_token', petitionTurnstileToken);
     try {
-      const response = await fetch(petitionForm.action, {method:'POST', body:payload, headers:{'X-Requested-With':'XMLHttpRequest'}});
+      const response = await fetch(petitionForm.action, {
+        method: 'POST',
+        body: payload,
+        headers: {'X-Requested-With': 'XMLHttpRequest'},
+      });
       const data = await response.json();
-      if (data.ok) {
-        if (data.duplicate) {
-          status.textContent = data.message;
-          status.className = 'form-response show';
-          document.querySelector('[data-signature-count]').textContent = data.verified_count;
-        } else renderSuccess(data);
+      if (data.ok && !data.duplicate) {
+        renderSuccess(data);
+      } else if (data.ok && data.duplicate) {
+        document.querySelector('[data-signature-count]').textContent = data.verified_count;
+        status.textContent = data.message;
+        status.className = 'form-response show';
       } else {
         status.textContent = data.message || 'We could not verify your support right now. Your support has not been counted.';
         status.className = 'form-response show error';
@@ -100,40 +132,56 @@ if (petitionForm) {
       resetTurnstile();
     } finally {
       submitting = false;
-      googleStep?.classList.remove('is-working');
-      valid();
+      validate();
     }
   };
+
   const initialiseGoogle = () => {
     if (!window.google?.accounts?.id) return window.setTimeout(initialiseGoogle, 100);
-    window.google.accounts.id.initialize({client_id:clientId, ux_mode:'popup', use_fedcm_for_button:true, callback:response => {
-      guidance.textContent = 'Waiting for Google verification…';
-      if (!response?.credential) {
-        status.textContent = 'Google verification was not completed. You can try again.';
-        status.className = 'form-response show error';
-        return;
-      }
-      submitCredential(response.credential);
-    }});
-    window.google.accounts.id.renderButton(googleShell, {theme:'outline', size:'large', type:'standard', shape:'pill', text:'continue_with', width:320, click_listener:() => {
-      guidance.textContent = 'Waiting for Google verification…';
-      status.textContent = '';
-    }});
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      ux_mode: 'popup',
+      use_fedcm_for_button: true,
+      callback: response => {
+        if (!response?.credential) {
+          status.textContent = 'Google verification was not completed. Please try again.';
+          status.className = 'form-response show error';
+          return;
+        }
+        submitCredential(response.credential);
+      },
+    });
+    window.google.accounts.id.renderButton(googleShell, {
+      theme: 'outline',
+      size: 'large',
+      type: 'standard',
+      shape: 'pill',
+      text: 'continue_with',
+      width: Math.min(360, Math.max(260, googleShell.clientWidth || 320)),
+      click_listener: () => {
+        status.className = 'form-response';
+        status.textContent = '';
+      },
+    });
     googleReady = true;
-    valid();
+    validate();
   };
+
   petitionForm.addEventListener('submit', event => event.preventDefault());
-  petitionForm.addEventListener('input', () => valid());
-  petitionForm.addEventListener('change', () => valid());
-  window.addEventListener('petition-verification-change', () => valid());
+  petitionForm.addEventListener('input', () => validate());
+  petitionForm.addEventListener('change', () => validate());
+  window.addEventListener('petition-verification-change', () => validate());
   initialiseGoogle();
 }
 
 document.querySelectorAll('[data-share-url]').forEach(button => button.addEventListener('click', async () => {
   const url = button.dataset.shareUrl || location.href;
   try {
-    if (navigator.share) await navigator.share({title:document.title, url});
-    else { await navigator.clipboard.writeText(url); button.textContent = 'Link copied'; }
+    if (navigator.share) await navigator.share({title: document.title, url});
+    else {
+      await navigator.clipboard.writeText(url);
+      button.textContent = 'Link copied';
+    }
   } catch (error) {}
 }));
 

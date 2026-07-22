@@ -48,10 +48,12 @@ class PublicPageTests(TestCase):
     def test_petition_uses_google_without_public_email_field(self):
         petition=Petition.objects.filter(petition_status='published').first()
         response=self.client.get(reverse('petition_detail',args=[petition.slug]))
-        self.assertContains(response, 'Verify with Google &amp; Add My Support')
+        self.assertContains(response, 'Verify one genuine support per Google account.')
         self.assertContains(response, 'cf-turnstile')
         self.assertNotContains(response, 'name="email"')
         self.assertNotContains(response, 'verification email will be sent')
+        self.assertNotContains(response, 'verified-email-row')
+        self.assertNotContains(response, 'form-response show')
         self.assertContains(response, 'type="hidden" name="website"', html=False)
 
 class PetitionSystemTests(TestCase):

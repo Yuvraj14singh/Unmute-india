@@ -83,3 +83,80 @@
   .security-check{align-items:center}
   .trust-notes{display:grid;grid-template-columns:1fr 1fr}
 }
+
+/* Final public petition form: one calm surface, no dashboard-style nesting. */
+.petition-action{grid-template-columns:minmax(250px,.72fr) minmax(0,1.28fr);gap:clamp(2.5rem,6vw,6rem);padding-block:clamp(3rem,6vw,5rem)}
+.count-panel>p:last-child{max-width:430px;margin-top:1.35rem;font-size:.92rem;line-height:1.55}
+.signature-card{max-width:820px;padding:clamp(1.35rem,2.8vw,2.35rem);border:1px solid #173c2720;border-radius:26px;box-shadow:0 24px 70px #061a3014}
+.form-heading{margin-bottom:1rem;padding-bottom:1rem}
+.form-heading h2{font-size:clamp(2rem,3.4vw,3.4rem);line-height:1.02}
+.form-heading p{font-size:clamp(.94rem,1.2vw,1.05rem)}
+.support-progress{display:grid;grid-template-columns:auto 1fr auto 1fr auto;align-items:center;margin:1rem 0 .25rem}
+.support-progress>i{height:1px;background:color-mix(in srgb,currentColor 22%,transparent)}
+.support-progress>span{display:flex;align-items:center;gap:.4rem;color:color-mix(in srgb,currentColor 56%,transparent)}
+.support-progress b{display:grid;place-items:center;width:25px;height:25px;border:1px solid currentColor;border-radius:50%;font-size:.72rem}
+.support-progress em{font-style:normal;font-size:.72rem;font-weight:750;white-space:nowrap}
+.support-progress span.is-complete,.support-progress span.is-active{color:#087f4f}
+.support-progress span.is-complete b{font-size:0;background:#087f4f;color:#fff;border-color:#087f4f}
+.support-progress span.is-complete b::after{content:'✓';font-size:.78rem}
+.active-step{display:none;margin:.45rem 0 1rem;color:#087f4f;font-size:.82rem;font-weight:800;text-align:center}
+.signature-card .form-grid{gap:1rem;margin-top:1rem}
+.signature-card .field{margin:0}
+.signature-card label{font-size:.88rem;margin-bottom:7px}
+.signature-card input:not([type=checkbox]),.signature-card select{height:50px;min-height:50px;padding:.7rem .85rem;border:1px solid #263d3033;border-radius:12px;background:#fbfaf5;color:#17221b;font-size:.95rem}
+.signature-card input:focus-visible,.signature-card select:focus-visible,.signature-card .consent input:focus-visible{outline:3px solid #ff7b1955;outline-offset:2px;border-color:#087f4f}
+.signature-card .field>small,.signature-card form>small[data-error],.human-check>small{display:block;min-height:1rem;margin-top:.25rem;color:#a43b24;font-size:.78rem}
+.signature-card .consent{display:flex!important;align-items:flex-start;gap:.7rem;margin:1rem 0 0!important;padding:0;background:transparent;border:0;border-radius:0;font-size:.88rem!important;line-height:1.45}
+.signature-card .consent input{width:20px;height:20px;min-width:20px;margin:1px 0 0}
+.human-check{margin-top:1rem}
+.human-check>label{display:block}
+.human-check .cf-turnstile{max-width:100%;min-height:65px;overflow:visible}
+.google-action{display:block;margin-top:1rem;padding:0;border:0;background:transparent;text-align:left}
+.google-action>p{margin:0 0 .7rem;font-size:.88rem;font-weight:750}
+.google-button-shell{justify-content:flex-start;max-width:100%;min-height:44px}
+.google-action>[data-guidance]{display:block;margin-top:.35rem;color:#5b6860;font-size:.78rem}
+.google-action>span{display:block;margin-top:10px;color:#5b6860;font-size:.85rem}
+.form-response{margin-top:.75rem;padding:.7rem .8rem;border-radius:10px;font-size:.85rem;line-height:1.45}
+.form-response:not(.show){display:none}
+.verified-success{padding:.75rem 0;text-align:center}
+.success-check{display:grid;place-items:center;width:70px;height:70px;margin:0 auto 1rem;border-radius:50%;background:#087f4f;color:#fff;font-size:2rem}
+.verified-success h3{font-size:clamp(2rem,4vw,3.2rem)}
+.verified-success>p strong{color:#087f4f;font-size:1.15rem}
+.verified-success dl{max-width:420px;margin:1rem auto}
+.verified-success>div:last-of-type{justify-content:center}
+
+[data-theme=dark] .signature-card{background:#0b282b;border-color:#dce8dd20;color:#f4efe2}
+[data-theme=dark] .signature-card input:not([type=checkbox]),[data-theme=dark] .signature-card select{background:#112f31;color:#f4efe2;border-color:#dce8dd33}
+[data-theme=dark] .google-action>[data-guidance],[data-theme=dark] .google-action>span{color:#c1cec4}
+[data-theme=dark] .support-progress span.is-complete,[data-theme=dark] .support-progress span.is-active{color:#69d49a}
+
+@media(max-width:767px){
+  .petition-action{grid-template-columns:1fr;gap:20px;padding:2rem 12px}
+  .count-panel{display:block}
+  .count-panel>b{font-size:4.5rem}
+  .count-panel .goal-track{margin:1rem 0 .4rem}
+  .count-panel>p:last-child{margin:.85rem 0 0}
+  .signature-card{width:100%;padding:18px;border-radius:20px}
+  .form-heading h2{font-size:clamp(2rem,9vw,3.4rem)}
+  .form-heading p{font-size:15px;line-height:1.5}
+  .support-progress{grid-template-columns:auto 1fr auto 1fr auto;margin-top:1rem}
+  .support-progress>span{display:block}
+  .support-progress em{display:none}
+  .support-progress b{width:28px;height:28px}
+  .active-step{display:block}
+  .signature-card .form-grid{grid-template-columns:1fr;gap:16px;margin-top:20px}
+  .signature-card label,.signature-card .consent,.google-action>p{font-size:14px!important}
+  .human-check{margin-top:16px}
+  .human-check .cf-turnstile{display:flex;justify-content:center}
+  .google-action{margin-top:16px;text-align:center}
+  .google-button-shell{justify-content:center;width:100%}
+  .google-action>span{font-size:14px}
+  .verified-success>div:last-of-type{display:grid;grid-template-columns:1fr;width:100%}
+  .verified-success .pill{width:100%}
+}
+@media(max-width:380px){
+  .petition-action{padding-inline:12px}
+  .signature-card{padding:18px}
+  .human-check .cf-turnstile{transform:scale(.94);transform-origin:center}
+}
+@media(prefers-reduced-motion:reduce){.goal-track i,.google-button-shell{transition:none}}
