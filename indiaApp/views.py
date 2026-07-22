@@ -9,6 +9,7 @@ from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
+from django.templatetags.static import static
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -170,12 +171,28 @@ def petition_detail(request, slug):
     supporters = petition.signatures.filter(is_verified=True, verified_at__isnull=False, moderation_status='valid', is_removed=False, removed_at__isnull=True).order_by('-verified_at')[:8]
     related = Petition.objects.filter(petition_status='published').exclude(pk=petition.pk)[:3]
     canonical_url = request.build_absolute_uri(petition.get_absolute_url())
-    social_image_url = request.build_absolute_uri(petition.cover_image.url) if petition.cover_image else ''
+    # The featured resignation campaign uses a deployment-safe static cover.
+    # User-uploaded media lives on Render's ephemeral filesystem unless an
+    # external media store is configured, so it must not be the only copy of
+    # this campaign's hero/share image.
+    if petition.slug == 'demand-resignation-dharmendra-pradhan':
+        hero_image_url = static(
+            'images/accountability/dharmendra-pradhan-resign.png'
+        )
+    elif petition.cover_image:
+        hero_image_url = petition.cover_image.url
+    else:
+        hero_image_url = ''
+    social_image_url = (
+        request.build_absolute_uri(f'{hero_image_url}?v=20260723')
+        if hero_image_url
+        else ''
+    )
     missing_verification_settings = _missing_google_support_settings()
     verification_available = not missing_verification_settings
     if not verification_available:
         logger.error('Google petition support disabled: missing environment variables: %s.', ', '.join(missing_verification_settings))
-    return render(request, 'accountability/petition_detail.html', {'petition':petition,'form':form,'verified_count':petition.verified_count,'supporters':supporters,'related_petitions':related,'canonical_url':canonical_url,'social_image_url':social_image_url,'google_client_id':settings.GOOGLE_CLIENT_ID,'turnstile_site_key':settings.TURNSTILE_SITE_KEY,'verification_available':verification_available,'google_support_url':reverse('google_petition_support', args=[petition.slug])})
+    return render(request, 'accountability/petition_detail.html', {'petition':petition,'form':form,'verified_count':petition.verified_count,'supporters':supporters,'related_petitions':related,'canonical_url':canonical_url,'hero_image_url':hero_image_url,'social_image_url':social_image_url,'google_client_id':settings.GOOGLE_CLIENT_ID,'turnstile_site_key':settings.TURNSTILE_SITE_KEY,'verification_available':verification_available,'google_support_url':reverse('google_petition_support', args=[petition.slug])})
 
 
 @require_POST
