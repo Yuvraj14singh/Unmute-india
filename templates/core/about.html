@@ -1,0 +1,96 @@
+{% extends 'base.html' %}{% load static %}
+{% block title %}About Unmute India | Our Mission for Students{% endblock %}
+{% block css %}<link rel="stylesheet" href="{% static 'css/core/about.css' %}"><link rel="stylesheet" href="{% static 'css/core/about_expansion.css' %}">{% endblock %}
+{% block content %}
+<header class="about-hero">
+  <div class="about-hero__glow" aria-hidden="true"></div>
+  <div class="about-hero__copy">
+    <p class="eyebrow">OUR MISSION · OUR COLLECTIVE</p>
+    <h1>Why Unmute India <em>Exists</em></h1>
+    <p class="about-lead">A student should not need perfect words, a public identity or a brave face before someone is willing to listen.</p>
+    <p>Unmute India is a private, human-first space for students across India to speak in their own way and receive a thoughtful response—without being pushed into a live conversation.</p>
+    <div class="about-actions"><a class="pill saffron" href="{% url 'talk' %}">Share What You Feel</a><a class="quiet-link" href="#our-story">Discover our mission <span>↓</span></a></div>
+  </div>
+  <figure class="about-hero__visual"><img src="{% static 'images/about/hopeful-students.webp' %}" alt="A diverse group of Indian students walking together through a green campus"><figcaption>Created by students and volunteers, for students across India.</figcaption></figure>
+  <div class="about-hero__seal" aria-hidden="true"><span>UI</span><small>VOICE · CARE · INDIA</small></div>
+</header>
+
+<section class="origin" id="our-story">
+  <p class="section-number">01</p><div class="origin__title"><p class="eyebrow green">HOW IT STARTED</p><h2>Watching students struggle is <em>not enough.</em></h2></div>
+  <div class="origin__copy"><p class="large-copy">“Unmute India began with a simple thought: watching students struggle is not enough. Even when we cannot stand beside every student physically, we can create a safe online space where they can speak and be heard.”</p><p>That thought became a mission: reduce the effort it takes to ask for support. A student may arrive scared, exhausted, confused or unable to explain everything. The platform must meet them there—with fewer questions, gentle choices and no pressure to perform their pain.</p></div>
+</section>
+
+<section class="identity-band">
+  <div><p class="eyebrow">WHO WE ARE</p><h2>A collective identity.<br><em>A student-first purpose.</em></h2></div>
+  <div class="identity-copy"><p>Our public identity is the <strong>Unmute India Team</strong>. We are building a mission-led platform, not a personality-led brand.</p><p>The work may include student listeners, senior listeners, support members and moderators. These are functional roles—not invented biographies or professional claims.</p><div class="role-strip"><span>Student Listener</span><span>Senior Listener</span><span>Support Member</span><span>Moderator</span><span>Verified Professional*</span></div><small>*A professional label may be shown only after a real person joins and their credentials have been reviewed.</small></div>
+</section>
+
+<section class="possibilities">
+  <div class="section-heading"><p class="eyebrow green">WHAT STUDENTS CAN DO HERE</p><h2>One space. Many ways to <em>begin.</em></h2><p>You choose the pace, the format and how much you want to say.</p></div>
+  <div class="possibility-grid">
+    <a href="{% url 'share' 'text' %}"><b>01</b><span class="icon">✎</span><h3>Write one sentence</h3><p>No title. No minimum length. Start wherever you are.</p><small>Write privately →</small></a>
+    <a href="{% url 'share' 'audio' %}"><b>02</b><span class="icon">◉</span><h3>Send a voice note</h3><p>Pause, take your time and speak without needing perfect words.</p><small>Record privately →</small></a>
+    <a href="{% url 'share' 'video' %}"><b>03</b><span class="icon">▶</span><h3>Share through video</h3><p>You never have to show your face or your real name to be heard.</p><small>Open video options →</small></a>
+    <a href="{% url 'page' 'help-me-say-it' %}"><b>04</b><span class="icon">“</span><h3>Find the words</h3><p>Prepare a message for someone you trust. Nothing sends automatically.</p><small>Help Me Say It →</small></a>
+  </div>
+</section>
+
+<section class="platform-map">
+  <div class="platform-map__intro"><p class="eyebrow green">THE COMPLETE PLATFORM</p><h2>What Unmute India is—and why every part exists.</h2><p>Students do not all need the same kind of space. Some need to say one private sentence. Some want to hear that they are not alone. Others need practical support, a public record or a peaceful way to demand accountability. Unmute India brings these paths together while keeping their privacy boundaries separate.</p></div>
+  <div class="platform-map__grid">
+    <article><span>01</span><h3>Share What You Feel</h3><p>A private starting point for text, voice or video. Nothing is published automatically, a face is never required and students decide whether they want listening, a reply or help finding one next step.</p><a href="{% url 'talk' %}">Open private sharing →</a></article>
+    <article><span>02</span><h3>Our Stories</h3><p>A public, moderated library of approved text, voice and video stories. Content appears only after public consent, privacy review and staff approval. Private submissions never enter this space automatically.</p><a href="{% url 'stories' %}">Browse public stories →</a></article>
+    <article><span>03</span><h3>Student Support</h3><p>Gentle starting points for exam pressure, family conversations, difficult thoughts, practical complaints and concern for another student. It offers information and peer listening—not emergency or clinical care.</p><a href="{% url 'page' 'support' %}">Explore support →</a></article>
+    <article><span>04</span><h3>Accountability</h3><p>A source-led public record for student demands, verified timelines, evidence, public questions, promises, authority responses and student-rights information. A demand is never presented as proof of wrongdoing.</p><a href="{% url 'accountability' %}">View accountability →</a></article>
+    <article><span>05</span><h3>Student Petitions</h3><p>Staff-managed campaigns for current and future student issues. Signatures count only after email verification; pending, spam, rejected or removed records never increase the public total.</p><a href="{% url 'accountability' %}#petition">View active petitions →</a></article>
+    <article><span>06</span><h3>Human Moderation</h3><p>Authorised staff review public stories, evidence, questions, comments and petition records. Audit logs and role-based permissions support responsibility behind the scenes.</p><a href="{% url 'page' 'guidelines' %}">Read community standards →</a></article>
+  </div>
+</section>
+
+<section class="why-built">
+  <div><p class="eyebrow">WHY THIS WEBSITE WAS BUILT</p><h2>Because silence can come from fear, pressure, privacy concerns or simply not knowing where to begin.</h2></div>
+  <div class="why-built__points"><article><b>Lower the first-step barrier</b><p>One sentence, a voice note or a covered-camera video can be enough.</p></article><article><b>Separate private care from public advocacy</b><p>Asking someone to listen never gives permission to publish a story.</p></article><article><b>Make public claims accountable</b><p>Sources, dates, review status and official responses matter more than viral certainty.</p></article><article><b>Protect student dignity</b><p>No fake testimonials, invented experts, public emails or personality-led founder narrative.</p></article></div>
+</section>
+
+<section class="boundaries-section">
+  <div><p class="eyebrow green">WHAT WE ARE · WHAT WE ARE NOT</p><h2>Trust needs clear limits.</h2></div>
+  <div class="boundary-columns"><article><h3>Unmute India is</h3><ul><li>A private-by-default listening platform</li><li>A moderated public story space</li><li>A practical student-support starting point</li><li>An evidence-led accountability platform</li><li>A collective student and volunteer mission</li></ul></article><article><h3>Unmute India is not</h3><ul><li>An emergency service</li><li>A replacement for licensed professional care</li><li>A place for unverified allegations to become facts</li><li>A public feed for private submissions</li><li>A personality or founder-focused brand</li></ul></article></div>
+</section>
+
+<section class="visual-story split-wide">
+  <figure class="about-photo portrait-photo"><img src="{% static 'images/about/voice-note.webp' %}" loading="lazy" alt="An Indian student recording a private voice note in a green campus garden"><figcaption>Illustrative scene · not a team profile</figcaption></figure>
+  <div><p class="eyebrow green">REAL PEOPLE WILL LISTEN</p><h2>A response should feel <em>human.</em></h2><p class="large-copy">Messages are intended to be read, heard or watched by authorised members who respond through the website with care.</p><ul class="promise-list"><li>Listen without judgement or lectures</li><li>Ask whether advice would feel useful</li><li>Respect anonymity and private boundaries</li><li>Avoid diagnosis and unverified professional claims</li><li>Never force a student to continue talking</li></ul><p class="note">Volunteers provide peer listening and platform support. They are not presented as counsellors, psychologists, lawyers or medical professionals.</p></div>
+</section>
+
+<section class="privacy-section">
+  <div class="privacy-mark" aria-hidden="true">⌾</div><div><p class="eyebrow">PRIVATE BY DEFAULT</p><h2>Your story does not become public because you asked for support.</h2><p>Every emotional submission starts private. Public sharing is a separate, optional choice that requires clear consent and moderation. A student can ask for human support without joining a public community or revealing their identity.</p></div>
+  <div class="privacy-points"><article><span>01</span><h3>No name required</h3><p>Anonymous sharing remains available.</p></article><article><span>02</span><h3>Authorised access</h3><p>Private content belongs in controlled member workflows.</p></article><article><span>03</span><h3>Consent before stories</h3><p>Nothing enters Our Stories automatically.</p></article></div>
+</section>
+
+<section class="anonymous-section">
+  <div class="anonymous-card"><img src="{% static 'images/brand/unmute-india.webp' %}" alt="Unmute India megaphone emblem"><div><p class="eyebrow">THE UNMUTE INDIA TEAM</p><h2>Why We Stay Anonymous</h2></div></div>
+  <div class="anonymous-copy"><p class="large-copy">“Unmute India is not about building a personality around one individual. The focus belongs to students who need a safe place to speak.”</p><p>Some members of the team choose to remain private for personal and safety reasons. Privacy does not remove accountability: our moderation standards, listener roles, safety practices and platform policies remain clearly documented.</p><p>No founder profile, personal photograph, biography or individual ownership claim is used. Trust should come from how the platform behaves—not from building a public personality.</p></div>
+</section>
+
+<section class="listening visual-story split-wide reverse">
+  <div><p class="eyebrow green">HOW LISTENING WORKS</p><h2>Careful steps. Clear <em>boundaries.</em></h2><div class="process"><article><b>1</b><div><h3>You share in your own way</h3><p>Text, audio or video. Anonymous if you choose.</p></div></article><article><b>2</b><div><h3>An authorised member receives it</h3><p>The request enters a private queue instead of becoming public.</p></div></article><article><b>3</b><div><h3>A member responds thoughtfully</h3><p>You may return and reply whenever you feel ready.</p></div></article></div></div>
+  <figure class="about-photo"><img src="{% static 'images/about/listening-process.webp' %}" loading="lazy" alt="An anonymous collective listening workflow with a laptop and handwritten notes"><figcaption>Illustrative workflow · no private message is shown</figcaption></figure>
+</section>
+
+<section class="manifesto">
+  <p class="eyebrow">OUR PROMISE</p><blockquote>“We will listen before we advise.<br>We will respect before we question.<br>We will protect privacy before we publish anything.”</blockquote><p>We will not invent testimonials, team members, qualifications or impact numbers. When information is not yet verified, we will say so clearly.</p>
+</section>
+
+<section class="rights-section">
+  <div><p class="eyebrow">ACCOUNTABILITY & STUDENT RIGHTS</p><h2>Listening is care.<br>Accountability is also care.</h2><p>Students deserve fair systems, responsible public institutions, peaceful ways to question authority and evidence-based information about their rights.</p><a class="quiet-link" href="{% url 'page' 'accountability' %}">Explore accountability <span>→</span></a></div>
+  <div class="rights-grid"><article><span>01</span><h3>Evidence before claims</h3><p>Sources, dates and verification status matter.</p></article><article><span>02</span><h3>Peaceful student voice</h3><p>Students must be able to ask questions without abuse or threats.</p></article><article><span>03</span><h3>Practical rights guidance</h3><p>Information should be clear, careful and honest about its limits.</p></article></div>
+</section>
+
+<section class="join-section">
+  <figure><img src="{% static 'images/support/students-listening.webp' %}" loading="lazy" alt="Indian students listening to one another in a campus courtyard"><figcaption>Community begins by making room for another voice.</figcaption></figure>
+  <div><p class="eyebrow">JOIN THE MISSION</p><h2>Help build a culture where students are heard.</h2><p>We welcome responsible volunteers who understand that listening is not the same as counselling. Applications are reviewed before anyone receives access to private student content.</p><div><a class="pill saffron" href="{% url 'volunteer' %}">Apply to Volunteer</a><a class="quiet-link" href="{% url 'page' 'guidelines' %}">Read our standards →</a></div></div>
+</section>
+
+<section class="about-final"><div class="chakra" aria-hidden="true">☸</div><p class="eyebrow">FOR STUDENTS ACROSS INDIA</p><h2>You do not have to carry everything alone.</h2><p>Whatever is on your mind, share it. We are listening.</p><div><a class="pill saffron" href="{% url 'share' 'text' %}">Write What You Feel</a><a class="pill ghost" href="{% url 'share' 'audio' %}">Send a Voice Note</a><a class="pill ghost" href="{% url 'share' 'video' %}">Share Through Video</a></div></section>
+{% endblock %}
+{% block js %}<script src="{% static 'js/core/about.js' %}" defer></script>{% endblock %}

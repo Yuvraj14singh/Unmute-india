@@ -1,0 +1,24 @@
+from django.urls import path
+from . import views
+urlpatterns = [
+ path('', views.home, name='home'), path('talk/', views.talk, name='talk'),
+ path('share/<str:kind>/', views.share, name='share'), path('received/', views.received, name='received'),
+ path('difficult-thoughts/', views.safety, name='safety'), path('stories/', views.stories, name='stories'),
+ path('stories/text/', views.story_format_page, {'story_format':'text'}, name='text_stories'),
+ path('stories/voice/', views.story_format_page, {'story_format':'voice'}, name='voice_stories'),
+ path('stories/videos/', views.story_format_page, {'story_format':'video'}, name='video_stories'),
+ path('stories/hope/', views.story_topic_page, {'topic':'hope'}, name='hope_stories'),
+ path('stories/exam-pressure/', views.story_topic_page, {'topic':'exam'}, name='exam_pressure_stories'),
+ path('stories/family-pressure/', views.story_topic_page, {'topic':'family'}, name='family_pressure_stories'),
+ path('stories/college-life/', views.story_topic_page, {'topic':'college'}, name='college_life_stories'),
+ path('stories/coaching-pressure/', views.story_topic_page, {'topic':'coaching'}, name='coaching_pressure_stories'),
+ path('stories/protest-experience/', views.story_topic_page, {'topic':'protest'}, name='protest_experience_stories'),
+ path('stories/message-to-students/', views.story_topic_page, {'topic':'message'}, name='message_to_students'),
+ path('stories/<slug:slug>/', views.story_detail, name='story_detail'), path('stories/<int:pk>/comment/', views.story_comment, name='story_comment'),
+ path('accountability/', views.accountability, name='accountability'),
+ path('petitions/<slug:slug>/', views.petition_detail, name='petition_detail'),
+ path('petitions/<slug:slug>/resend/', views.petition_resend, name='petition_resend'),
+ path('petitions/verify/<str:token>/', views.petition_verify, name='petition_verify'),
+ path('stories/<int:pk>/react/', views.react, name='react'), path('volunteer/', views.volunteer, name='volunteer'),
+ path('staff-dashboard/', views.dashboard, name='dashboard'), path('<str:page>/', views.simple_page, name='page'),
+]

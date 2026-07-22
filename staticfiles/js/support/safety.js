@@ -1,0 +1,1 @@
+document.querySelector('[data-unsafe]')?.addEventListener('click',()=>{const panel=document.querySelector('#urgentHelp');panel.hidden=false;panel.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});panel.focus?.()})

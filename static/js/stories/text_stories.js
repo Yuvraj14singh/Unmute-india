@@ -1,0 +1,1 @@
+document.querySelectorAll('[data-expand]').forEach(button=>button.addEventListener('click',()=>{const story=button.closest('article'),preview=story.querySelector('[data-preview]>p'),full=story.querySelector('.story-full'),opening=!full.hidden;full.hidden=opening;preview.hidden=!opening;button.textContent=opening?'Read here':'Show less'}));

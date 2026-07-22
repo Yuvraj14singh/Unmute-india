@@ -1,0 +1,16 @@
+Hi {{ name }},
+
+Thank you for supporting this petition:
+
+{{ petition.title }}
+
+Please confirm your support by opening the link below.
+
+Your signature will be counted only after your email address is verified.
+
+Verify My Support:
+{{ verification_url }}
+
+If you did not submit this request, you can safely ignore this email.
+
+Unmute India Team

@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block title %}Member Login{% endblock %}{% block content %}<section class="share-wrap"><h1>Member login</h1><p>Private submissions are available only to authorised team members.</p><form method="post">{% csrf_token %}{{ form.as_p }}<button class="pill">Log in securely</button></form></section>{% endblock %}

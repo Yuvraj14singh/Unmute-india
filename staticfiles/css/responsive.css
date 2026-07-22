@@ -1,0 +1,245 @@
+/* Compact, readable responsive rhythm shared by every public page. */
+.nav nav .mobile-share { display: none; }
+
+[data-theme="dark"] .nav .menu,
+[data-theme="dark"] .nav .theme { color: #fff; }
+[data-theme="dark"] .nav .theme {
+  background: #123b3b;
+  border: 1px solid #ffffff38;
+  box-shadow: 0 8px 22px #0004;
+}
+
+/* Switch to the compact navigation before the desktop actions begin to crop. */
+@media (max-width: 1100px) {
+  .nav { height: auto; min-height: 76px; flex-wrap: wrap; padding: .7rem 1rem; }
+  .nav .menu { display: block; margin-left: auto; color: var(--ink); }
+  .nav nav { display: none; width: 100%; order: 5; flex-direction: column; padding: 1rem; }
+  .nav nav.open { display: flex; }
+  .nav > .pill { display: none; }
+  .nav nav .mobile-share { display: inline-flex; align-self: stretch; color: #fff !important; }
+  [data-theme="dark"] .nav nav { background: #0b292c; border: 1px solid #ffffff24; }
+  [data-theme="dark"] .nav nav a { color: #f4f7f2 !important; }
+}
+
+@media (max-width: 900px) {
+  [data-theme="dark"] .nav nav {
+    background: #0b292c;
+    border: 1px solid #ffffff24;
+  }
+  [data-theme="dark"] .nav nav a { color: #f4f7f2 !important; }
+  [data-theme="dark"] .nav nav .mobile-share { color: #fff !important; }
+}
+
+@media (max-width: 900px) {
+  section { padding-block: clamp(3.5rem, 8vw, 5rem); }
+  .section-head { margin-bottom: 2rem; }
+  footer { padding-block: 3.5rem 2rem; }
+  .nav nav .mobile-share {
+    display: inline-flex;
+    align-self: stretch;
+    margin-top: .35rem;
+    padding: .85rem 1rem;
+    color: #fff;
+    text-align: center;
+  }
+}
+
+@media (max-width: 720px) {
+  :root { --mobile-gap: .75rem; }
+  section { padding: 3.25rem 1rem; }
+  h1 { font-size: clamp(2.65rem, 13vw, 4.3rem); line-height: .96; }
+  h2 { font-size: clamp(2rem, 9.5vw, 3.15rem); line-height: 1.02; }
+  h3 { line-height: 1.15; }
+  p { line-height: 1.55; }
+
+  :where(.flow-options,.possibility-grid,.privacy-grid,.concern-grid,.evidence-cards,.sample-messages,.resource-list,.cards,.story-row,.link-grid,.category-editorial > div) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: var(--mobile-gap) !important;
+  }
+
+  :where(.flow-options,.possibility-grid,.privacy-grid,.concern-grid,.evidence-cards,.sample-messages,.resource-list,.cards,.story-row,.link-grid,.category-editorial > div) > :is(a, article):last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    justify-self: center;
+    width: calc(50% - (var(--mobile-gap) / 2));
+  }
+
+  :where(.flow-option,.possibility-card,.concern-card,.evidence-card,.sample-message,.resource-card,.story-row article,.link-grid a) {
+    min-height: 0 !important;
+    padding: 1rem !important;
+    border-radius: 18px !important;
+  }
+  .flow-option { min-height: 148px !important; }
+  .flow-option .number { margin-bottom: 1rem; }
+  .possibility-card { min-height: 230px !important; }
+  .possibility-card .icon { margin-bottom: 1.25rem !important; }
+
+  :where(.split,.talk-split,.support-split,.media-stories,.video-section,.evidence-preview,.minister-block,.questions-wall,.petition-section,.difficult-support,.join-section,.identity-band,.anonymous-section,.rights-section,.support-choices,.just-listen,.worried,.form-two,.story-grid) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .three-steps { gap: 1.5rem !important; }
+  .three-steps > * { padding-block: 1rem !important; }
+  .before-share ul { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: .6rem !important; }
+
+  .account-hero,.about-hero,.ac-hero,.stories-hero,.support-hero { min-height: 600px !important; }
+  footer .footer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 1.75rem 1rem; }
+  footer .footer-grid h3 { font-size: .86rem; }
+  footer .footer-grid a { font-size: .9rem; }
+}
+
+@media (max-width: 420px) {
+  section { padding-block: 2.75rem; }
+  :root { --mobile-gap: .55rem; }
+  :where(.flow-option,.possibility-card,.concern-card,.evidence-card,.sample-message,.resource-card,.story-row article,.link-grid a) { padding: .85rem !important; }
+  .flow-option { min-height: 136px !important; }
+  .flow-option h3,.possibility-card h3,.concern-card h3 { font-size: 1rem !important; }
+  .flow-option p,.possibility-card p,.concern-card p { font-size: .82rem !important; }
+  .possibility-card { min-height: 205px !important; }
+  .account-hero,.about-hero,.ac-hero,.stories-hero,.support-hero { min-height: 540px !important; }
+  footer { padding-inline: 1rem; }
+  footer .footer-grid { gap: 1.35rem .75rem; }
+}
+
+/* Compact banner system: heroes introduce a page without occupying a full screen. */
+:where(.account-hero,.about-hero,.ac-hero,.stories-hero,.support-hero,.petition-hero) {
+  min-height: clamp(440px, 58svh, 620px) !important;
+  max-height: 680px;
+}
+.about-hero { padding-block: clamp(2.5rem,5vw,4.5rem) !important; }
+.about-hero__visual img { height: min(48vh,500px) !important; }
+:where(.account-hero,.about-hero,.ac-hero,.stories-hero,.support-hero,.petition-hero) h1 {
+  font-size: clamp(3rem,5.5vw,6rem) !important;
+}
+.ac-hero__copy>div,.stories-hero nav,.petition-hero-copy .actions { margin-block: 1.25rem !important; }
+.talk-hero { min-height: 0 !important; padding-top: clamp(3rem,5vw,4.5rem) !important; padding-bottom: 3rem !important; }
+.talk-hero h1 { font-size: clamp(3rem,5.5vw,5.6rem) !important; }
+.talk-hero .flow-options { margin-top: 2.25rem; }
+
+@media (max-width: 720px) {
+  :where(.account-hero,.about-hero,.ac-hero,.stories-hero,.support-hero,.petition-hero) {
+    min-height: 470px !important;
+    max-height: none;
+    padding-top: 2.5rem !important;
+    padding-bottom: 2.5rem !important;
+    align-items: center !important;
+  }
+  :where(.account-hero,.about-hero,.ac-hero,.stories-hero,.support-hero,.petition-hero) h1 {
+    font-size: clamp(2.55rem,11vw,4rem) !important;
+    margin-block: .65rem 1rem !important;
+  }
+  .about-hero { grid-template-columns: 1fr 190px !important; gap: 1rem !important; }
+  .about-hero__visual img { height: 310px !important; border-radius: 80px 80px 20px 20px !important; }
+  .stories-hero>div:last-child,.support-hero>div:last-child { margin-inline: 1rem !important; }
+  .ac-hero__copy { margin-inline: 1rem !important; }
+  .petition-hero-copy { padding: 2.5rem 1rem !important; }
+  .scroll-cue { display: none; }
+}
+
+@media (max-width: 520px) {
+  :where(.account-hero,.ac-hero,.stories-hero,.support-hero,.petition-hero) { min-height: 450px !important; }
+  .about-hero { min-height: 520px !important; display: block !important; }
+  .about-hero__visual { display: none; }
+  .account-hero .hero-copy { padding-block: 1.5rem !important; }
+  .stories-hero nav { gap: .5rem; margin-block: 1rem !important; }
+  .stories-hero small,.support-hero small { display: none; }
+}
+
+/* Site-wide premium density system. Large editorial moments remain expressive,
+   while ordinary sections no longer consume an entire viewport. */
+section {
+  padding: clamp(3.5rem,5.5vw,5.75rem) clamp(1.2rem,6vw,6rem) !important;
+}
+section h2 {
+  font-size: clamp(2.2rem,3.8vw,4rem) !important;
+  line-height: 1.06 !important;
+}
+section h3 { line-height: 1.2; }
+.section-head,.section-heading,.section-intro,.stories-heading { margin-bottom: clamp(1.5rem,3vw,3rem) !important; }
+.section-heading { max-width: 760px; }
+
+/* Editorial grids and cards */
+:where(.three,.story-row,.possibility-grid,.concern-grid,.evidence-cards,.sample-messages,.resource-list,.petition-cards,.related-petitions>div) {
+  gap: clamp(.7rem,1.2vw,1rem) !important;
+}
+:where(.three article,.story-row article,.possibility-grid a,.concern-grid article,.evidence-cards article,.sample-messages span,.resource-list article,.petition-cards a,.related-petitions a) {
+  padding: clamp(1.15rem,2vw,1.7rem) !important;
+  min-height: 0 !important;
+  border-radius: 22px !important;
+}
+.possibility-grid a { min-height: 260px !important; }
+.possibility-grid .icon { margin: 1.6rem 0 1rem !important; }
+.concern-grid article { min-height: 185px !important; }
+.concern-grid h3 { margin: 1.5rem 0 .5rem !important; }
+.story-grid,.story-row,.petition-cards,.resource-list,.sample-messages { margin-top: 2rem !important; }
+.story-card { padding: 1.5rem !important; border-radius: 22px !important; }
+.story-card h3 { margin-top: 1.5rem !important; font-size: 1.65rem !important; }
+
+/* Media should support the copy rather than dominate it. */
+:where(.image-frame,.about-photo,.talk-photo,.join-section figure,.media-stories figure,.evidence-preview figure) { max-width: 660px; }
+:where(.image-frame img,.about-photo img,.talk-photo img,.join-section img,.media-stories img,.evidence-preview img) { max-height: 480px; }
+.image-frame.portrait,.talk-photo.portrait,.portrait-photo { max-width: 500px; justify-self: center; }
+
+/* Reduce oversized editorial spacing inside long pages. */
+.ac-why__title { margin: 1.5rem 0 3rem !important; }
+.timeline-list { margin-top: 2.5rem !important; }
+.timeline-list article { padding: 2rem 0 !important; }
+.context-grid { margin: 2rem 0 !important; }
+.unanswered ol,.petition-questions ol { margin-top: 2.5rem !important; }
+.unanswered li,.petition-questions li { padding: 1rem 0 !important; }
+.promise-table article,.response-list article { padding: 1.35rem 0 !important; }
+.primary-demand { margin: 2.5rem 0 !important; }
+.primary-demand p { font-size: clamp(1.4rem,2.4vw,2.35rem) !important; }
+.signature-count { margin-top: 2rem !important; }
+.signature-count b,.count-panel>b { font-size: clamp(4rem,7vw,6.5rem) !important; }
+.role-lines article,.process article,.privacy-points article { padding-block: .9rem !important; }
+
+/* Empty states and forms fit their real content. */
+.stories-empty,.honest-empty,.empty-queue { padding: clamp(2rem,4vw,3.5rem) !important; }
+.civic-form,.studio-panel,.signature-card { padding: clamp(1.2rem,2.5vw,2rem) !important; border-radius: 26px !important; }
+.typing-pad textarea { min-height: 260px !important; }
+.camera-placeholder { min-height: 230px !important; }
+
+/* Closing banners stay emotional without becoming another full page. */
+:where(.final-cta,.about-final,.talk-final,.support-final,.stories-final,.ac-final,.petition-share,.authority-response,.manifesto) {
+  padding-top: clamp(3.5rem,5vw,5rem) !important;
+  padding-bottom: clamp(3.5rem,5vw,5rem) !important;
+  min-height: 0 !important;
+}
+:where(.final-cta,.about-final,.talk-final,.support-final,.stories-final,.ac-final,.petition-share) h2 {
+  font-size: clamp(2.3rem,4.2vw,4.4rem) !important;
+}
+
+@media (max-width: 900px) {
+  section { padding: 3.5rem clamp(1rem,4vw,2.5rem) !important; }
+  section h2 { font-size: clamp(2.05rem,6vw,3.25rem) !important; }
+  .possibility-grid a { min-height: 220px !important; }
+  :where(.image-frame img,.about-photo img,.talk-photo img,.join-section img,.media-stories img,.evidence-preview img) { max-height: 420px; }
+}
+
+@media (max-width: 600px) {
+  section { padding: 2.75rem 1rem !important; }
+  section h2 { font-size: clamp(1.9rem,8.5vw,2.75rem) !important; }
+  section h3 { font-size: clamp(1rem,4.6vw,1.3rem); }
+  .section-head,.section-heading,.section-intro,.stories-heading { margin-bottom: 1.5rem !important; }
+  .possibility-grid a { min-height: 185px !important; }
+  .possibility-grid .icon { width: 45px!important; height: 45px!important; margin: 1rem 0 .7rem!important; }
+  .timeline-list article { padding: 1.4rem 0 !important; }
+  .timeline-list { margin-top: 1.5rem !important; }
+  .typing-pad textarea { min-height: 220px !important; }
+  :where(.final-cta,.about-final,.talk-final,.support-final,.stories-final,.ac-final,.petition-share,.authority-response,.manifesto) { padding-block: 3rem !important; }
+}
+
+/* Story browsing density: four cards on desktop, two on phones. */
+@media (min-width: 901px) {
+  .featured-feed .story-grid { grid-template-columns: repeat(4,minmax(0,1fr)) !important; }
+  .featured-feed .story-card { padding: 1.15rem !important; }
+  .featured-feed .story-card h3 { font-size: 1.35rem !important; margin-top: 1.1rem !important; }
+  .featured-feed .story-card p { font-size: .82rem; }
+}
+@media (max-width: 650px) {
+  .featured-feed .story-grid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; gap: .55rem !important; }
+  .featured-feed .story-card { padding: .85rem !important; border-radius: 18px !important; }
+  .featured-feed .story-card h3 { font-size: 1.05rem !important; margin-top: .8rem !important; }
+  .featured-feed .story-card p { font-size: .75rem; }
+  .featured-feed .story-card form button:nth-child(n+2),.featured-feed .badges span:nth-child(n+3) { display: none; }
+}

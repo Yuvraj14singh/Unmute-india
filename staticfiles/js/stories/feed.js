@@ -1,0 +1,1 @@
+if(!matchMedia('(prefers-reduced-motion: reduce)').matches){const els=document.querySelectorAll('main section,.story-card,.category-editorial article');els.forEach(e=>e.classList.add('stories-reveal'));const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.08});els.forEach(e=>io.observe(e))}

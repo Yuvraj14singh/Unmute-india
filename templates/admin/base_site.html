@@ -1,0 +1,5 @@
+{% extends "admin/base.html" %}{% load static %}
+{% block title %}{{ title }} | Unmute India Staff{% endblock %}
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/admin/unmute-admin.css' %}">{% endblock %}
+{% block branding %}<div class="unmute-admin-brand"><img src="{% static 'images/brand/unmute-india.webp' %}" alt=""><div><strong>Unmute India</strong><small>Moderation & listening workspace</small></div></div>{% endblock %}
+{% block nav-global %}<a class="staff-desk-link" href="{% url 'dashboard' %}">Listening Desk</a><a class="public-site-link" href="{% url 'home' %}">View public site ↗</a>{% endblock %}
