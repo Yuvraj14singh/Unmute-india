@@ -39,7 +39,7 @@ if (form) {
       const result = await fetch(location.href, {method: 'POST', body: new FormData(form), headers: {'X-Requested-With': 'XMLHttpRequest'}});
       const data = await result.json();
       response.textContent = data.ok
-        ? `Check your inbox.\n\nWe sent a verification link to ${data.masked_email}. Your support will be counted after you verify your email.`
+        ? `${data.message}\n\nSent to ${data.masked_email}. Your support will be counted after you verify your email.`
         : (data.message || 'Please check the form and try again.');
       response.className = `form-response show${data.ok ? '' : ' error'}`;
       if (data.ok) {

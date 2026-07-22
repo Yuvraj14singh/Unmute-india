@@ -48,6 +48,11 @@ def accountability(request):
     }
     return render(request, 'core/accountability.html', context)
 
+def _masked_email_for_log(email):
+    local, _, domain = (email or '').partition('@')
+    return f'{local[:1]}***@{domain}' if domain else 'invalid-email'
+
+
 def _petition_email(request, signature, raw_token):
     if not settings.DEBUG and settings.EMAIL_BACKEND.endswith('console.EmailBackend'):
         raise ImproperlyConfigured('A real email backend is required for petition verification.')
@@ -70,42 +75,75 @@ def _petition_email(request, signature, raw_token):
         signature.pk,
         recipient_domain,
     )
+    return sent
 
 def _issue_token(request, signature):
+    previous_token = signature.verification_token
+    previous_token_created_at = signature.token_created_at
     raw = secrets.token_urlsafe(32)
     now = timezone.now()
     signature.verification_token = hashlib.sha256(raw.encode()).hexdigest()
     signature.token_created_at = now
-    signature.verification_email_attempts += 1
-    signature.resend_available_at = now + timezone.timedelta(minutes=5)
-    signature.save(update_fields=['verification_token','token_created_at','verification_email_attempts','resend_available_at','normalized_email','verified'])
+    # Store the token before sending so the URL is immediately usable, but do not
+    # mark the attempt as sent or start its cooldown until SMTP accepts it.
+    signature.save(update_fields=['verification_token','token_created_at','normalized_email','verified'])
+    logger.info('Petition token created signature=%s petition=%s.', signature.pk, signature.petition_id)
     try:
-        _petition_email(request, signature, raw)
-    except Exception:
+        logger.info('Petition email helper called signature=%s.', signature.pk)
+        sent = _petition_email(request, signature, raw)
+    except Exception as exc:
+        # A failed delivery must not invalidate a previously delivered link.
+        signature.verification_token = previous_token
+        signature.token_created_at = previous_token_created_at
+        signature.save(update_fields=['verification_token', 'token_created_at'])
         PetitionSignature.objects.filter(pk=signature.pk).update(verification_email_failures=F('verification_email_failures') + 1)
         AuditLog.objects.create(action='Verification email failed', object_reference=f'PetitionSignature:{signature.pk}')
+        logger.exception('Petition email exception signature=%s type=%s.', signature.pk, type(exc).__name__)
         raise
-    signature.verification_email_sent_at = timezone.now()
-    signature.save(update_fields=['verification_email_sent_at'])
+    sent_at = timezone.now()
+    signature.verification_email_sent_at = sent_at
+    signature.resend_available_at = sent_at + timezone.timedelta(minutes=5)
+    signature.verification_email_attempts += 1
+    signature.save(update_fields=['verification_email_sent_at','resend_available_at','verification_email_attempts'])
+    logger.info('Petition email send result signature=%s sent=%s.', signature.pk, sent)
     AuditLog.objects.create(action='Verification email sent', object_reference=f'PetitionSignature:{signature.pk}')
 
 def petition_detail(request, slug):
     petition = get_object_or_404(Petition, slug=slug, petition_status__in=['published','paused','closed'])
     form = PetitionSignatureForm(request.POST or None)
     if request.method == 'POST':
+        logger.info('Petition submission reached petition=%s.', petition.pk)
         if not petition.accepts_signatures:
             return JsonResponse({'ok':False,'message':'This petition is not accepting signatures.'}, status=400)
-        last = request.session.get('petition_submit_at', 0)
-        if timezone.now().timestamp() - last < 10:
-            return JsonResponse({'ok':False,'message':'Please wait a moment before trying again.'}, status=429)
         if form.is_valid():
             email = form.cleaned_data['email'].strip().casefold()
             existing = PetitionSignature.objects.filter(petition=petition, normalized_email=email).first()
             if existing:
+                logger.info(
+                    'Petition signature existing signature=%s petition=%s email=%s verified=%s.',
+                    existing.pk, petition.pk, _masked_email_for_log(email), existing.is_verified,
+                )
                 PetitionSignature.objects.filter(pk=existing.pk).update(duplicate_attempts=F('duplicate_attempts') + 1)
-                message = 'This email has already verified support for this petition.' if existing.is_verified else 'Your support is waiting for email verification.'
-                remaining = max(0, int((existing.resend_available_at - timezone.now()).total_seconds())) if existing.resend_available_at else 0
-                return JsonResponse({'ok':False,'duplicate':True,'pending':not existing.is_verified,'message':message,'masked_email':mask_email(existing.email),'cooldown_seconds':remaining,'resend_url':reverse('petition_resend', args=[petition.slug])})
+                if existing.is_verified:
+                    logger.info('Petition verified duplicate branch signature=%s.', existing.pk)
+                    return JsonResponse({'ok':False,'duplicate':True,'pending':False,'message':'This email has already verified support for this petition.','masked_email':mask_email(existing.email)})
+                now = timezone.now()
+                if existing.resend_available_at and now < existing.resend_available_at:
+                    remaining = max(1, int((existing.resend_available_at - now).total_seconds()))
+                    logger.info('Petition pending cooldown branch signature=%s remaining=%s.', existing.pk, remaining)
+                    return JsonResponse({'ok':False,'duplicate':True,'pending':True,'message':'Please wait five minutes before requesting another email.','masked_email':mask_email(existing.email),'cooldown_seconds':remaining,'resend_url':reverse('petition_resend', args=[petition.slug])}, status=429)
+                logger.info('Petition duplicate-pending resend branch signature=%s.', existing.pk)
+                try:
+                    _issue_token(request, existing)
+                except Exception:
+                    logger.exception('Petition pending verification resend failed signature=%s.', existing.pk)
+                    return JsonResponse({'ok':False,'pending':True,'message':'We could not send the verification email right now. Please try again.','resend_url':reverse('petition_resend', args=[petition.slug])}, status=503)
+                request.session['petition_submit_at'] = timezone.now().timestamp()
+                request.session['pending_petition_email'] = email
+                return JsonResponse({'ok':True,'message':'Verification email sent. Check your inbox and spam folder to confirm your support.','masked_email':mask_email(existing.email),'cooldown_seconds':300,'resend_url':reverse('petition_resend', args=[petition.slug])})
+            last = request.session.get('petition_submit_at', 0)
+            if timezone.now().timestamp() - last < 10:
+                return JsonResponse({'ok':False,'message':'Please wait a moment before trying again.'}, status=429)
             signature = None
             try:
                 with transaction.atomic():
@@ -116,7 +154,9 @@ def petition_detail(request, slug):
                     signature.ip_hash = request_fingerprint(request.META.get('REMOTE_ADDR',''), settings.SECRET_KEY)
                     signature.user_agent_hash = request_fingerprint(request.META.get('HTTP_USER_AGENT',''), settings.SECRET_KEY)
                     signature.save()
+                logger.info('Petition signature created signature=%s petition=%s email=%s.', signature.pk, petition.pk, _masked_email_for_log(email))
                 AuditLog.objects.create(action='Signature submitted', object_reference=f'PetitionSignature:{signature.pk}')
+                logger.info('Petition first-send branch signature=%s.', signature.pk)
                 _issue_token(request, signature)
                 request.session['petition_submit_at'] = timezone.now().timestamp()
                 request.session['pending_petition_email'] = email
@@ -131,7 +171,8 @@ def petition_detail(request, slug):
                     'resend_url': reverse('petition_resend', args=[petition.slug]),
                 }, status=503)
             return JsonResponse({'ok':True,'message':'Verification email sent. Check your inbox and spam folder to confirm your support.','masked_email':mask_email(signature.email),'cooldown_seconds':300,'resend_url':reverse('petition_resend', args=[petition.slug])})
-        return JsonResponse({'ok':False,'errors':form.errors.get_json_data()}, status=400)
+        logger.info('Petition form invalid petition=%s fields=%s.', petition.pk, sorted(form.errors.keys()))
+        return JsonResponse({'ok':False,'errors':form.errors.get_json_data(),'message':'Please correct the highlighted fields and try again.'}, status=400)
     supporters = petition.signatures.filter(is_verified=True, verified_at__isnull=False, moderation_status='valid', is_removed=False, removed_at__isnull=True).order_by('-verified_at')[:8]
     related = Petition.objects.filter(petition_status='published').exclude(pk=petition.pk)[:3]
     canonical_url = request.build_absolute_uri(petition.get_absolute_url())

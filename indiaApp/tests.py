@@ -63,6 +63,69 @@ class PetitionSystemTests(TestCase):
     def setUp(self):
         self.petition=Petition.objects.create(title='Test petition',slug='test-petition',short_heading='Test',summary='Summary',primary_demand='Action',petition_status='published',allow_signatures=True)
 
+    def signature_data(self, email='Student@Example.com '):
+        return {'name':'Student','email':email,'supporter_type':'student','consent':'on'}
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend', SITE_URL='https://unmute-india.onrender.com')
+    def test_new_submission_sends_once_without_cooldown_or_resend_message(self):
+        response = self.client.post(reverse('petition_detail', args=[self.petition.slug]), self.signature_data())
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['ok'])
+        self.assertIn('Verification email sent', response.json()['message'])
+        self.assertNotIn('wait five minutes', response.json()['message'].lower())
+        self.assertNotIn('new verification email', response.json()['message'].lower())
+        self.assertEqual(PetitionSignature.objects.filter(petition=self.petition).count(), 1)
+        signature = PetitionSignature.objects.get(petition=self.petition)
+        self.assertEqual(signature.normalized_email, 'student@example.com')
+        self.assertFalse(signature.is_verified)
+        self.assertIsNotNone(signature.verification_email_sent_at)
+        self.assertIsNotNone(signature.resend_available_at)
+        self.assertEqual(self.petition.verified_count, 0)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['student@example.com'])
+        self.assertIn('https://unmute-india.onrender.com/petitions/verify/', mail.outbox[0].body)
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    def test_pending_duplicate_obeys_cooldown_then_sends_one_new_email(self):
+        url = reverse('petition_detail', args=[self.petition.slug])
+        self.client.post(url, self.signature_data())
+        signature = PetitionSignature.objects.get(petition=self.petition)
+        first_token = signature.verification_token
+
+        cooldown = self.client.post(url, self.signature_data())
+        self.assertEqual(cooldown.status_code, 429)
+        self.assertEqual(cooldown.json()['message'], 'Please wait five minutes before requesting another email.')
+        self.assertEqual(PetitionSignature.objects.filter(petition=self.petition).count(), 1)
+        self.assertEqual(len(mail.outbox), 1)
+
+        signature.resend_available_at = timezone.now() - timezone.timedelta(seconds=1)
+        signature.save(update_fields=['resend_available_at'])
+        resent = self.client.post(url, self.signature_data())
+        self.assertEqual(resent.status_code, 200)
+        self.assertTrue(resent.json()['ok'])
+        signature.refresh_from_db()
+        self.assertNotEqual(signature.verification_token, first_token)
+        self.assertEqual(PetitionSignature.objects.filter(petition=self.petition).count(), 1)
+        self.assertEqual(len(mail.outbox), 2)
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    def test_verified_duplicate_sends_nothing(self):
+        url = reverse('petition_detail', args=[self.petition.slug])
+        self.client.post(url, self.signature_data())
+        signature = PetitionSignature.objects.get(petition=self.petition)
+        signature.is_verified = True
+        signature.verified = True
+        signature.verified_at = timezone.now()
+        signature.moderation_status = 'valid'
+        signature.save()
+        mail.outbox.clear()
+
+        response = self.client.post(url, self.signature_data())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['message'], 'This email has already verified support for this petition.')
+        self.assertEqual(PetitionSignature.objects.filter(petition=self.petition).count(), 1)
+        self.assertEqual(len(mail.outbox), 0)
+
     def test_form_has_only_required_public_fields(self):
         form=PetitionSignatureForm()
         self.assertNotIn('state',form.fields)
@@ -83,7 +146,11 @@ class PetitionSystemTests(TestCase):
         payload = response.json()
         self.assertFalse(payload['ok'])
         self.assertTrue(payload['pending'])
-        self.assertEqual(PetitionSignature.objects.get().is_verified, False)
+        signature = PetitionSignature.objects.get()
+        self.assertFalse(signature.is_verified)
+        self.assertIsNone(signature.verification_email_sent_at)
+        self.assertIsNone(signature.resend_available_at)
+        self.assertNotIn('Verification email sent', payload['message'])
 
     @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
     def test_token_counts_once_and_duplicate_is_blocked(self):
