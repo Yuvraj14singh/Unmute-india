@@ -61,6 +61,12 @@ def _petition_email(request, signature, raw_token):
     sent = email.send(fail_silently=False)
     if sent != 1:
         raise RuntimeError('The verification email provider did not accept the message.')
+    recipient_domain = signature.email.rsplit('@', 1)[-1].lower()
+    logger.info(
+        'Petition verification email accepted by SMTP for signature=%s recipient_domain=%s.',
+        signature.pk,
+        recipient_domain,
+    )
 
 def _issue_token(request, signature):
     raw = secrets.token_urlsafe(32)

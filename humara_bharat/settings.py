@@ -14,6 +14,8 @@ from pathlib import Path
 from importlib.util import find_spec
 import os
 
+from django.core.exceptions import ImproperlyConfigured
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -49,11 +51,16 @@ if render_hostname and render_hostname not in ALLOWED_HOSTS:
 
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
-    for origin in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
+    for origin in os.environ.get(
+        'CSRF_TRUSTED_ORIGINS',
+        'https://*.onrender.com',
+    ).split(',')
     if origin.strip()
 ]
 if render_hostname:
-    CSRF_TRUSTED_ORIGINS.append(f'https://{render_hostname}')
+    render_origin = f'https://{render_hostname}'
+    if render_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(render_origin)
 
 
 # Application definition
@@ -196,9 +203,34 @@ EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() in ('1','true','yes')
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False').lower() in ('1','true','yes')
 EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '20'))
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'Unmute India <noreply@localhost>')
 PETITION_VERIFICATION_EXPIRY_HOURS = int(os.environ.get('PETITION_VERIFICATION_EXPIRY_HOURS', '48'))
+
+if EMAIL_HOST == 'smtp.gmail.com':
+    # Google displays app passwords grouped with spaces. SMTP expects the raw
+    # 16-character value, so accept either form from Render's environment UI.
+    EMAIL_HOST_PASSWORD = ''.join(EMAIL_HOST_PASSWORD.split())
+
+if os.environ.get('RENDER'):
+    required_email_settings = {
+        'EMAIL_HOST': EMAIL_HOST,
+        'EMAIL_HOST_USER': EMAIL_HOST_USER,
+        'EMAIL_HOST_PASSWORD': EMAIL_HOST_PASSWORD,
+        'DEFAULT_FROM_EMAIL': DEFAULT_FROM_EMAIL,
+    }
+    missing_email_settings = [key for key, value in required_email_settings.items() if not value]
+    if 'noreply@localhost' in DEFAULT_FROM_EMAIL:
+        missing_email_settings.append('DEFAULT_FROM_EMAIL (must use the authenticated sender)')
+    if EMAIL_BACKEND.endswith('console.EmailBackend'):
+        missing_email_settings.append('EMAIL_BACKEND (must use SMTP in production)')
+    if missing_email_settings:
+        raise ImproperlyConfigured(
+            'Production petition email is not configured: ' + ', '.join(missing_email_settings)
+        )
+    if EMAIL_USE_TLS and EMAIL_USE_SSL:
+        raise ImproperlyConfigured('Enable only one of EMAIL_USE_TLS or EMAIL_USE_SSL.')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -231,6 +263,11 @@ LOGGING = {
         'django.db.backends': {
             'handlers': ['console'],
             'level': 'ERROR',
+            'propagate': False,
+        },
+        'indiaApp': {
+            'handlers': ['console'],
+            'level': 'INFO',
             'propagate': False,
         },
     },
