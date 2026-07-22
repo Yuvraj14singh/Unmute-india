@@ -192,7 +192,9 @@ class Petition(TimeStampedModel):
     @property
     def question_list(self): return [x.strip() for x in self.questions.splitlines() if x.strip()]
     @property
-    def verified_count(self): return self.signatures.filter(is_verified=True, moderation_status='valid', removed_at__isnull=True).count()
+    def verified_count(self):
+        if self.petition_status != 'published': return 0
+        return self.signatures.filter(is_verified=True, verified_at__isnull=False, moderation_status='valid', is_removed=False, removed_at__isnull=True).count()
     class Meta:
         permissions = [('publish_petition','Can publish, pause, reopen and close petitions'),('view_petition_analytics','Can view petition analytics')]
 
@@ -211,8 +213,14 @@ class PetitionSignature(TimeStampedModel):
     verified_at = models.DateTimeField(null=True, blank=True)
     verification_token = models.CharField(max_length=64, blank=True)
     token_created_at = models.DateTimeField(null=True, blank=True)
+    verification_email_sent_at = models.DateTimeField(null=True, blank=True)
+    verification_email_attempts = models.PositiveIntegerField(default=0)
+    verification_email_failures = models.PositiveIntegerField(default=0)
+    duplicate_attempts = models.PositiveIntegerField(default=0)
+    resend_available_at = models.DateTimeField(null=True, blank=True)
     moderation_status = models.CharField(max_length=12, choices=MODERATION, default='pending', db_index=True)
     removed_at = models.DateTimeField(null=True, blank=True)
+    is_removed = models.BooleanField(default=False, db_index=True)
     removal_reason = models.CharField(max_length=240, blank=True)
     ip_hash = models.CharField(max_length=64, blank=True)
     user_agent_hash = models.CharField(max_length=64, blank=True)
@@ -221,6 +229,10 @@ class PetitionSignature(TimeStampedModel):
         self.email = self.email.strip()
         self.verified = self.is_verified
         super().save(*args, **kwargs)
+    @property
+    def verification_token_hash(self): return self.verification_token
+    @property
+    def verification_token_created_at(self): return self.token_created_at
     class Meta:
         constraints = [models.UniqueConstraint(fields=['petition','normalized_email'], name='unique_email_per_petition')]
         permissions = [('moderate_petition_signatures','Can moderate petition signatures'),('manually_verify_signature','Can manually verify a petition signature')]
