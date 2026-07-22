@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 from pathlib import Path
 from importlib.util import find_spec
+from django.core.exceptions import ImproperlyConfigured
 import os
 import warnings
 
@@ -129,13 +130,26 @@ WSGI_APPLICATION = 'humara_bharat.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-if os.environ.get('DATABASE_URL'):
+DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
+
+# Render's filesystem is ephemeral. Falling back to SQLite in production would
+# make verified petition signatures disappear on every deploy or instance
+# restart, so production must use the attached PostgreSQL database.
+if os.environ.get('RENDER') and not DATABASE_URL:
+    raise ImproperlyConfigured(
+        'DATABASE_URL is required on Render. Attach a persistent PostgreSQL '
+        'database before starting Unmute India.'
+    )
+
+if DATABASE_URL:
     import dj_database_url
 
     DATABASES = {
         'default': dj_database_url.config(
+            default=DATABASE_URL,
             conn_max_age=600,
             conn_health_checks=True,
+            ssl_require=not DEBUG,
         )
     }
 else:
