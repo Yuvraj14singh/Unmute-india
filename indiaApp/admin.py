@@ -35,11 +35,11 @@ class PetitionAdmin(admin.ModelAdmin):
 
 @admin.register(PetitionSignature)
 class PetitionSignatureAdmin(admin.ModelAdmin):
-    list_display=('name','masked_email','supporter_type','petition','is_verified','verification_email_attempts','verification_email_failures','moderation_status','verified_at','created_at')
-    list_filter=('petition','is_verified','moderation_status','supporter_type')
-    search_fields=('name','email','normalized_email')
-    readonly_fields=('normalized_email','verification_token','token_created_at','verification_email_sent_at','verification_email_attempts','verification_email_failures','duplicate_attempts','resend_available_at','is_verified','verified','verified_at','ip_hash','user_agent_hash','created_at','updated_at')
-    actions=('mark_valid','mark_spam','reject_signatures','remove_signatures','export_verified')
+    list_display=('name','masked_email','supporter_type','petition','verification_label','is_verified','moderation_status','verified_at','created_at')
+    list_filter=('petition','verification_method','is_verified','moderation_status','supporter_type')
+    search_fields=('name','email','normalized_email','google_subject')
+    readonly_fields=('normalized_email','google_subject','verified_email','verification_method','google_verified_at','turnstile_verified_at','verification_metadata','verification_token','token_created_at','verification_email_sent_at','verification_email_attempts','verification_email_failures','duplicate_attempts','resend_available_at','is_verified','verified','verified_at','ip_hash','user_agent_hash','created_at','updated_at')
+    actions=('mark_valid','flag_for_review','mark_spam','reject_signatures','remove_signatures','restore_signatures','export_verified')
     def _moderate(self,request,queryset,status):
         count=queryset.update(moderation_status=status)
         AuditLog.objects.create(actor=request.user,action=f'Marked {count} signatures {status}',object_reference='PetitionSignature bulk action')
@@ -49,6 +49,13 @@ class PetitionSignatureAdmin(admin.ModelAdmin):
     def masked_email(self,obj):
         from .utils import mask_email
         return mask_email(obj.email)
+    @admin.display(description='Verification')
+    def verification_label(self,obj):
+        if obj.verification_method == 'google' and obj.is_verified: return 'Google Verified'
+        if obj.is_verified: return 'Legacy Email Verified'
+        return 'Pending Legacy Email'
+    @admin.action(description='Flag selected signatures for review')
+    def flag_for_review(self,request,queryset): self._moderate(request,queryset,'pending')
     @admin.action(description='Mark selected signatures as spam')
     def mark_spam(self,request,queryset): self._moderate(request,queryset,'spam')
     @admin.action(description='Reject selected signatures')
@@ -58,6 +65,10 @@ class PetitionSignatureAdmin(admin.ModelAdmin):
         from django.utils import timezone
         count=queryset.update(moderation_status='removed',is_removed=True,removed_at=timezone.now())
         AuditLog.objects.create(actor=request.user,action=f'Removed {count} signatures',object_reference='PetitionSignature bulk action')
+    @admin.action(description='Restore selected valid signatures')
+    def restore_signatures(self,request,queryset):
+        count=queryset.filter(is_verified=True).update(moderation_status='valid',is_removed=False,removed_at=None,removal_reason='')
+        AuditLog.objects.create(actor=request.user,action=f'Restored {count} signatures',object_reference='PetitionSignature bulk action')
     @admin.action(description='Export selected verified signatures as CSV')
     def export_verified(self,request,queryset):
         import csv

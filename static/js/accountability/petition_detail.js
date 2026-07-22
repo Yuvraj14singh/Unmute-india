@@ -1,90 +1,117 @@
-const form = document.querySelector('[data-petition-form]');
+const petitionForm = document.querySelector('[data-petition-form]');
+let petitionTurnstileToken = '';
 
-if (form) {
-  const name = form.querySelector('[name=name]');
-  const email = form.querySelector('[name=email]');
-  const role = form.querySelector('[name=supporter_type]');
-  const consent = form.querySelector('[name=consent]');
-  const button = form.querySelector('[type=submit]');
-  const response = form.querySelector('.form-response');
-  const csrf = form.querySelector('[name=csrfmiddlewaretoken]').value;
-  let sending = false;
-  const validEmail = value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+window.petitionTurnstileReady = token => {
+  petitionTurnstileToken = token;
+  window.dispatchEvent(new Event('petition-verification-change'));
+};
+window.petitionTurnstileExpired = () => {
+  petitionTurnstileToken = '';
+  window.dispatchEvent(new Event('petition-verification-change'));
+};
+
+if (petitionForm) {
+  const name = petitionForm.querySelector('[name=name]');
+  const role = petitionForm.querySelector('[name=supporter_type]');
+  const consent = petitionForm.querySelector('[name=consent]');
+  const googleShell = petitionForm.querySelector('[data-google-button]');
+  const guidance = petitionForm.querySelector('[data-guidance]');
+  const status = petitionForm.querySelector('.form-response');
+  const clientId = petitionForm.dataset.googleClientId;
+  let submitting = false;
+  let googleReady = false;
+
   const showError = (field, message) => {
-    const target = form.querySelector(`[data-error="${field}"]`);
+    const target = petitionForm.querySelector(`[data-error="${field}"]`);
     if (target) target.textContent = message;
   };
-  const validate = (show = false) => {
-    const checks = {name: !!name.value.trim(), email: validEmail(email.value), supporter_type: !!role.value, consent: consent.checked};
-    button.disabled = !Object.values(checks).every(Boolean);
+  const valid = (show = false) => {
+    const checks = {name: Boolean(name.value.trim()), supporter_type: Boolean(role.value), consent: consent.checked, turnstile_token: Boolean(petitionTurnstileToken)};
     if (show) {
       showError('name', checks.name ? '' : 'Please enter your name.');
-      showError('email', checks.email ? '' : 'Enter a valid email address.');
       showError('supporter_type', checks.supporter_type ? '' : 'Select your role.');
       showError('consent', checks.consent ? '' : 'Please confirm your consent.');
+      showError('turnstile_token', checks.turnstile_token ? '' : 'Complete the security check.');
     }
-    return !button.disabled;
+    const ready = Object.values(checks).every(Boolean) && googleReady && !submitting;
+    googleShell.classList.toggle('is-disabled', !ready);
+    googleShell.setAttribute('aria-disabled', String(!ready));
+    guidance.textContent = ready ? 'Choose your Google account to verify your support.' : 'Complete all fields and the security check to continue.';
+    return ready;
   };
-  form.addEventListener('input', () => validate());
-  form.addEventListener('change', () => validate());
-  form.addEventListener('submit', async event => {
-    event.preventDefault();
-    if (sending || !validate(true)) return;
-    sending = true;
-    button.disabled = true;
-    button.textContent = 'Sending verification email…';
-    response.className = 'form-response';
-    const submittedEmail = email.value.trim();
+  const resetTurnstile = () => {
+    petitionTurnstileToken = '';
+    if (window.turnstile) window.turnstile.reset();
+    valid();
+  };
+  const renderSuccess = data => {
+    petitionForm.hidden = true;
+    const panel = document.querySelector('[data-verified-success]');
+    panel.hidden = false;
+    panel.querySelector('[data-success-petition]').textContent = data.petition_title || document.title.split('|')[0].trim();
+    panel.querySelector('[data-success-count]').textContent = `${data.verified_count} verified supporters`;
+    panel.querySelector('[data-success-role]').textContent = data.role || 'Verified supporter';
+    document.querySelector('[data-signature-count]').textContent = data.verified_count;
+    document.querySelector('[data-signature-label]').textContent = `${data.verified_count} verified supporter${data.verified_count === 1 ? '' : 's'}`;
+  };
+  const submitCredential = async credential => {
+    if (submitting || !valid(true)) return;
+    submitting = true;
+    googleShell.classList.add('is-disabled');
+    guidance.textContent = 'Verifying and adding your support…';
+    status.textContent = '';
+    const payload = new FormData(petitionForm);
+    payload.set('credential', credential);
+    payload.set('turnstile_token', petitionTurnstileToken);
     try {
-      const result = await fetch(location.href, {method: 'POST', body: new FormData(form), headers: {'X-Requested-With': 'XMLHttpRequest'}});
-      const data = await result.json();
-      response.textContent = data.ok
-        ? `${data.message}\n\nSent to ${data.masked_email}. Your support will be counted after you verify your email.`
-        : (data.message || 'Please check the form and try again.');
-      response.className = `form-response show${data.ok ? '' : ' error'}`;
+      const response = await fetch(petitionForm.action, {method:'POST', body:payload, headers:{'X-Requested-With':'XMLHttpRequest'}});
+      const data = await response.json();
       if (data.ok) {
-        button.textContent = 'Check Your Email';
-        form.reset();
-        const resend = document.createElement('button'); resend.type = 'button'; resend.className = 'resend-link';
-        let remaining = Number(data.cooldown_seconds || 300);
-        const paint = () => { resend.disabled = remaining > 0; resend.textContent = remaining > 0 ? `Resend available in ${Math.ceil(remaining / 60)} min` : 'Resend Verification Email'; };
-        paint(); const timer = setInterval(() => { remaining -= 1; paint(); if (remaining <= 0) clearInterval(timer); }, 1000);
-        resend.addEventListener('click', async () => { resend.disabled = true; resend.textContent = 'Sending…'; const payload = new FormData(); payload.append('email', submittedEmail); payload.append('csrfmiddlewaretoken', csrf); const sent = await fetch(data.resend_url, {method:'POST',body:payload}); const sentData = await sent.json(); response.firstChild.textContent = sentData.message; remaining = Number(sentData.cooldown_seconds || 300); paint(); });
-        const back = document.createElement('a'); back.href = '#support'; back.textContent = 'Back to petition'; back.className = 'resend-link';
-        response.append(document.createElement('br'), resend, ' ', back);
+        if (data.duplicate) {
+          status.textContent = data.message;
+          status.className = 'form-response show';
+          document.querySelector('[data-signature-count]').textContent = data.verified_count;
+        } else renderSuccess(data);
       } else {
-        button.textContent = 'Add My Support';
-        validate();
-        if (data.pending && data.resend_url) {
-          const pendingEmail = email.value.trim();
-          const resend = document.createElement('button');
-          resend.type = 'button'; resend.className = 'resend-link';
-          let remaining = Number(data.cooldown_seconds || 0);
-          const paint = () => { resend.disabled = remaining > 0; resend.textContent = remaining > 0 ? `Resend available in ${Math.ceil(remaining / 60)} min` : 'Resend Verification Email'; };
-          paint(); const timer = remaining > 0 ? setInterval(() => { remaining -= 1; paint(); if (remaining <= 0) clearInterval(timer); }, 1000) : null;
-          resend.addEventListener('click', async () => {
-            resend.disabled = true; resend.textContent = 'Sending…';
-            const payload = new FormData(); payload.append('email', pendingEmail); payload.append('csrfmiddlewaretoken', csrf);
-            const sent = await fetch(data.resend_url, {method: 'POST', body: payload});
-            const sentData = await sent.json(); response.textContent = sentData.message;
-            if (sentData.ok) resend.remove(); else { remaining = Number(sentData.cooldown_seconds || 0); paint(); }
-          });
-          response.append(document.createElement('br'), resend);
-        }
+        status.textContent = data.message || 'We could not verify your support right now. Your support has not been counted.';
+        status.className = 'form-response show error';
+        if (data.reset_turnstile) resetTurnstile();
       }
     } catch (error) {
-      response.textContent = 'We could not submit this right now. Please try again.';
-      response.className = 'form-response show error';
-      button.textContent = 'Add My Support'; validate();
-    } finally { sending = false; }
-  });
-  validate();
+      status.textContent = 'We could not verify your support right now. Your support has not been counted.';
+      status.className = 'form-response show error';
+      resetTurnstile();
+    } finally {
+      submitting = false;
+      valid();
+    }
+  };
+  const initialiseGoogle = () => {
+    if (!window.google?.accounts?.id) return window.setTimeout(initialiseGoogle, 100);
+    window.google.accounts.id.initialize({client_id:clientId, callback:response => {
+      guidance.textContent = 'Waiting for Google verification…';
+      if (!response?.credential) {
+        status.textContent = 'Google verification was not completed. You can try again.';
+        status.className = 'form-response show error';
+        return;
+      }
+      submitCredential(response.credential);
+    }});
+    window.google.accounts.id.renderButton(googleShell, {theme:'outline', size:'large', type:'standard', shape:'pill', text:'continue_with', width:320});
+    googleReady = true;
+    valid();
+  };
+  petitionForm.addEventListener('submit', event => event.preventDefault());
+  petitionForm.addEventListener('input', () => valid());
+  petitionForm.addEventListener('change', () => valid());
+  window.addEventListener('petition-verification-change', () => valid());
+  initialiseGoogle();
 }
 
 document.querySelectorAll('[data-share-url]').forEach(button => button.addEventListener('click', async () => {
   const url = button.dataset.shareUrl || location.href;
   try {
-    if (navigator.share) await navigator.share({title: document.title, url});
+    if (navigator.share) await navigator.share({title:document.title, url});
     else { await navigator.clipboard.writeText(url); button.textContent = 'Link copied'; }
   } catch (error) {}
 }));

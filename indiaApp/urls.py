@@ -17,6 +17,7 @@ urlpatterns = [
  path('stories/<slug:slug>/', views.story_detail, name='story_detail'), path('stories/<int:pk>/comment/', views.story_comment, name='story_comment'),
  path('accountability/', views.accountability, name='accountability'),
  path('petitions/<slug:slug>/', views.petition_detail, name='petition_detail'),
+ path('accountability/petitions/<slug:slug>/google-support/', views.google_petition_support, name='google_petition_support'),
  path('petitions/<slug:slug>/resend/', views.petition_resend, name='petition_resend'),
  path('petitions/verify/<str:token>/', views.petition_verify, name='petition_verify'),
  path('stories/<int:pk>/react/', views.react, name='react'), path('volunteer/', views.volunteer, name='volunteer'),

@@ -45,3 +45,29 @@ class PetitionSignatureForm(forms.ModelForm):
     def clean_website(self):
         if self.cleaned_data.get('website'): raise forms.ValidationError('Invalid submission.')
         return ''
+
+
+class GooglePetitionSupportForm(forms.Form):
+    name = forms.CharField(max_length=100)
+    supporter_type = forms.ChoiceField(choices=PetitionSignature.SUPPORTER_TYPES)
+    consent = forms.BooleanField(required=True)
+    credential = forms.CharField(required=True)
+    turnstile_token = forms.CharField(required=True)
+    website = forms.CharField(required=False)
+
+    def clean_name(self):
+        name = self.cleaned_data['name'].strip()
+        if not name:
+            raise forms.ValidationError('Please enter your name.')
+        return name
+
+    def clean_supporter_type(self):
+        role = self.cleaned_data['supporter_type']
+        if not role:
+            raise forms.ValidationError('Select your role.')
+        return role
+
+    def clean_website(self):
+        if self.cleaned_data.get('website'):
+            raise forms.ValidationError('Invalid submission.')
+        return ''

@@ -201,6 +201,7 @@ class Petition(TimeStampedModel):
 class PetitionSignature(TimeStampedModel):
     SUPPORTER_TYPES = [('','Select your role'),('student','Student'),('parent','Parent'),('teacher','Teacher'),('educator','Educator'),('volunteer','Volunteer'),('citizen','Citizen'),('other','Other')]
     MODERATION = [('pending','Pending'),('valid','Valid'),('rejected','Rejected'),('duplicate','Duplicate'),('spam','Spam'),('removed','Removed')]
+    VERIFICATION_METHODS = [('email_legacy','Legacy Email'),('google','Google')]
     petition = models.ForeignKey(Petition, null=True, related_name='signatures', on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
     email = models.EmailField()
@@ -224,6 +225,12 @@ class PetitionSignature(TimeStampedModel):
     removal_reason = models.CharField(max_length=240, blank=True)
     ip_hash = models.CharField(max_length=64, blank=True)
     user_agent_hash = models.CharField(max_length=64, blank=True)
+    google_subject = models.CharField(max_length=255, blank=True, db_index=True)
+    verified_email = models.EmailField(blank=True)
+    verification_method = models.CharField(max_length=20, choices=VERIFICATION_METHODS, default='email_legacy', db_index=True)
+    google_verified_at = models.DateTimeField(null=True, blank=True)
+    turnstile_verified_at = models.DateTimeField(null=True, blank=True)
+    verification_metadata = models.JSONField(default=dict, blank=True)
     def save(self, *args, **kwargs):
         self.normalized_email = self.email.strip().casefold()
         self.email = self.email.strip()
@@ -234,7 +241,10 @@ class PetitionSignature(TimeStampedModel):
     @property
     def verification_token_created_at(self): return self.token_created_at
     class Meta:
-        constraints = [models.UniqueConstraint(fields=['petition','normalized_email'], name='unique_email_per_petition')]
+        constraints = [
+            models.UniqueConstraint(fields=['petition','normalized_email'], name='unique_email_per_petition'),
+            models.UniqueConstraint(fields=['petition','google_subject'], condition=~models.Q(google_subject=''), name='unique_google_subject_per_petition'),
+        ]
         permissions = [('moderate_petition_signatures','Can moderate petition signatures'),('manually_verify_signature','Can manually verify a petition signature')]
 
 class PetitionSource(TimeStampedModel):

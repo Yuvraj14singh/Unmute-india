@@ -4,7 +4,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from unittest.mock import patch
-from .forms import PetitionSignatureForm
+from .forms import GooglePetitionSupportForm
 from .models import ListeningRequest, Petition, PetitionSignature, PublicQuestion, Story
 from .utils import compact_count
 
@@ -44,160 +44,98 @@ class PublicPageTests(TestCase):
         self.assertRedirects(response, reverse('accountability'))
         self.assertFalse(PublicQuestion.objects.get().approved)
 
-    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend', SITE_URL='https://unmute.example')
-    def test_petition_signature_requires_email_verification(self):
+    @override_settings(GOOGLE_CLIENT_ID='client', TURNSTILE_SITE_KEY='site', TURNSTILE_SECRET_KEY='secret')
+    def test_petition_uses_google_without_public_email_field(self):
         petition=Petition.objects.filter(petition_status='published').first()
-        response=self.client.post(reverse('petition_detail',args=[petition.slug]),{'name':'A Student','email':'student@example.com','supporter_type':'student','consent':'on'})
-        self.assertEqual(response.status_code,200)
-        signature=PetitionSignature.objects.get(email='student@example.com')
-        self.assertFalse(signature.is_verified)
-        self.assertEqual(petition.verified_count,0)
-        self.assertEqual(len(mail.outbox),1)
-        self.assertEqual(mail.outbox[0].to, ['student@example.com'])
-        self.assertEqual(mail.outbox[0].subject, f'Verify your support for {petition.title} | Unmute India')
-        self.assertIn('https://unmute.example/petitions/verify/', mail.outbox[0].body)
-        self.assertNotIn('localhost', mail.outbox[0].body)
-        self.assertNotContains(response, 'Please wait five minutes')
+        response=self.client.get(reverse('petition_detail',args=[petition.slug]))
+        self.assertContains(response, 'Verify with Google &amp; Add My Support')
+        self.assertContains(response, 'cf-turnstile')
+        self.assertNotContains(response, 'name="email"')
+        self.assertNotContains(response, 'verification email will be sent')
 
 class PetitionSystemTests(TestCase):
     def setUp(self):
         self.petition=Petition.objects.create(title='Test petition',slug='test-petition',short_heading='Test',summary='Summary',primary_demand='Action',petition_status='published',allow_signatures=True)
 
-    def signature_data(self, email='Student@Example.com '):
-        return {'name':'Student','email':email,'supporter_type':'student','consent':'on'}
+    def support_data(self, **overrides):
+        data={'name':'Student','supporter_type':'student','consent':'on','credential':'raw-google-token','turnstile_token':'turnstile-token'}
+        data.update(overrides); return data
 
-    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend', SITE_URL='https://unmute-india.onrender.com')
-    def test_new_submission_sends_once_without_cooldown_or_resend_message(self):
-        response = self.client.post(reverse('petition_detail', args=[self.petition.slug]), self.signature_data())
-        self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.json()['ok'])
-        self.assertIn('Verification email sent', response.json()['message'])
-        self.assertNotIn('wait five minutes', response.json()['message'].lower())
-        self.assertNotIn('new verification email', response.json()['message'].lower())
-        self.assertEqual(PetitionSignature.objects.filter(petition=self.petition).count(), 1)
-        signature = PetitionSignature.objects.get(petition=self.petition)
-        self.assertEqual(signature.normalized_email, 'student@example.com')
-        self.assertFalse(signature.is_verified)
-        self.assertIsNotNone(signature.verification_email_sent_at)
-        self.assertIsNotNone(signature.resend_available_at)
-        self.assertEqual(self.petition.verified_count, 0)
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertEqual(mail.outbox[0].to, ['student@example.com'])
-        self.assertIn('https://unmute-india.onrender.com/petitions/verify/', mail.outbox[0].body)
+    @property
+    def support_url(self): return reverse('google_petition_support',args=[self.petition.slug])
 
-    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
-    def test_pending_duplicate_obeys_cooldown_then_sends_one_new_email(self):
-        url = reverse('petition_detail', args=[self.petition.slug])
-        self.client.post(url, self.signature_data())
-        signature = PetitionSignature.objects.get(petition=self.petition)
-        first_token = signature.verification_token
+    def identity(self, sub='google-123', email='Student@Example.com'):
+        return {'sub':sub,'email':email.strip().casefold(),'issuer':'https://accounts.google.com'}
 
-        cooldown = self.client.post(url, self.signature_data())
-        self.assertEqual(cooldown.status_code, 429)
-        self.assertEqual(cooldown.json()['message'], 'Please wait five minutes before requesting another email.')
-        self.assertEqual(PetitionSignature.objects.filter(petition=self.petition).count(), 1)
-        self.assertEqual(len(mail.outbox), 1)
+    @override_settings(GOOGLE_CLIENT_ID='client',TURNSTILE_SITE_KEY='site',TURNSTILE_SECRET_KEY='secret')
+    @patch('indiaApp.views._verify_turnstile', return_value={'hostname':'unmute-india.onrender.com'})
+    @patch('indiaApp.views._verify_google_credential')
+    def test_valid_google_support_counts_once_and_stores_no_token(self, google, turnstile):
+        google.return_value=self.identity()
+        response=self.client.post(self.support_url,self.support_data())
+        self.assertTrue(response.json()['ok']); self.assertFalse(response.json()['duplicate'])
+        signature=PetitionSignature.objects.get()
+        self.assertTrue(signature.is_verified); self.assertEqual(signature.verification_method,'google')
+        self.assertEqual(signature.google_subject,'google-123'); self.assertEqual(signature.verified_email,'student@example.com')
+        self.assertNotIn('raw-google-token',str(signature.verification_metadata)); self.assertEqual(self.petition.verified_count,1)
+        duplicate=self.client.post(self.support_url,self.support_data()).json()
+        self.assertTrue(duplicate['duplicate']); self.assertEqual(PetitionSignature.objects.count(),1); self.assertEqual(self.petition.verified_count,1)
 
-        signature.resend_available_at = timezone.now() - timezone.timedelta(seconds=1)
-        signature.save(update_fields=['resend_available_at'])
-        resent = self.client.post(url, self.signature_data())
-        self.assertEqual(resent.status_code, 200)
-        self.assertTrue(resent.json()['ok'])
-        signature.refresh_from_db()
-        self.assertNotEqual(signature.verification_token, first_token)
-        self.assertEqual(PetitionSignature.objects.filter(petition=self.petition).count(), 1)
-        self.assertEqual(len(mail.outbox), 2)
+    def test_google_form_requires_every_security_field(self):
+        for missing in ('name','supporter_type','consent','credential','turnstile_token'):
+            data=self.support_data(); data.pop(missing)
+            form=GooglePetitionSupportForm(data)
+            self.assertFalse(form.is_valid(),missing); self.assertIn(missing,form.errors)
 
-    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
-    def test_verified_duplicate_sends_nothing(self):
-        url = reverse('petition_detail', args=[self.petition.slug])
-        self.client.post(url, self.signature_data())
-        signature = PetitionSignature.objects.get(petition=self.petition)
-        signature.is_verified = True
-        signature.verified = True
-        signature.verified_at = timezone.now()
-        signature.moderation_status = 'valid'
-        signature.save()
-        mail.outbox.clear()
+    @override_settings(GOOGLE_CLIENT_ID='client',TURNSTILE_SITE_KEY='site',TURNSTILE_SECRET_KEY='secret')
+    @patch('indiaApp.views._verify_turnstile', side_effect=ValueError('invalid'))
+    def test_invalid_turnstile_creates_nothing(self, verify):
+        response=self.client.post(self.support_url,self.support_data())
+        self.assertEqual(response.status_code,400); self.assertTrue(response.json()['reset_turnstile']); self.assertFalse(PetitionSignature.objects.exists())
 
-        response = self.client.post(url, self.signature_data())
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['message'], 'This email has already verified support for this petition.')
-        self.assertEqual(PetitionSignature.objects.filter(petition=self.petition).count(), 1)
-        self.assertEqual(len(mail.outbox), 0)
+    @override_settings(GOOGLE_CLIENT_ID='client',TURNSTILE_SITE_KEY='site',TURNSTILE_SECRET_KEY='secret')
+    @patch('indiaApp.views._verify_turnstile', return_value={})
+    @patch('indiaApp.views._verify_google_credential', side_effect=ValueError('invalid audience or expired'))
+    def test_invalid_wrong_audience_or_expired_google_token_creates_nothing(self, google, turnstile):
+        response=self.client.post(self.support_url,self.support_data())
+        self.assertEqual(response.status_code,400); self.assertFalse(PetitionSignature.objects.exists())
 
-    def test_form_has_only_required_public_fields(self):
-        form=PetitionSignatureForm()
-        self.assertNotIn('state',form.fields)
-        for field in ('name','email','supporter_type','consent'): self.assertTrue(form.fields[field].required)
+    @override_settings(GOOGLE_CLIENT_ID='client',TURNSTILE_SITE_KEY='site',TURNSTILE_SECRET_KEY='secret')
+    @patch('indiaApp.views._verify_turnstile', return_value={})
+    @patch('indiaApp.views._verify_google_credential', side_effect=PermissionError('unverified'))
+    def test_unverified_google_email_is_rejected(self, google, turnstile):
+        response=self.client.post(self.support_url,self.support_data())
+        self.assertContains(response,'does not have a verified email',status_code=400); self.assertFalse(PetitionSignature.objects.exists())
 
-    def test_invalid_name_email_role_and_consent(self):
-        form=PetitionSignatureForm({'name':'  ','email':'bad','supporter_type':'','consent':''})
-        self.assertFalse(form.is_valid())
-        self.assertTrue({'name','email','supporter_type','consent'}.issubset(form.errors))
+    @override_settings(GOOGLE_CLIENT_ID='client',TURNSTILE_SITE_KEY='site',TURNSTILE_SECRET_KEY='secret')
+    @patch('indiaApp.views._verify_turnstile', return_value={})
+    @patch('indiaApp.views._verify_google_credential')
+    @patch('indiaApp.views.AuditLog.objects.create', side_effect=RuntimeError('database audit failure'))
+    def test_transaction_rolls_back_if_commit_path_fails(self, audit, google, turnstile):
+        google.return_value=self.identity()
+        response=self.client.post(self.support_url,self.support_data())
+        self.assertEqual(response.status_code,503)
+        self.assertFalse(PetitionSignature.objects.exists())
 
-    @patch('indiaApp.views._petition_email', side_effect=ConnectionError('SMTP unavailable'))
-    def test_email_failure_is_not_reported_as_success(self, mocked_email):
-        response = self.client.post(reverse('petition_detail', args=[self.petition.slug]), {
-            'name': 'Student', 'email': 'pending@example.com',
-            'supporter_type': 'student', 'consent': 'on',
-        })
-        self.assertEqual(response.status_code, 503)
-        payload = response.json()
-        self.assertFalse(payload['ok'])
-        self.assertTrue(payload['pending'])
-        signature = PetitionSignature.objects.get()
-        self.assertFalse(signature.is_verified)
-        self.assertIsNone(signature.verification_email_sent_at)
-        self.assertIsNone(signature.resend_available_at)
-        self.assertNotIn('Verification email sent', payload['message'])
-
-    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
-    def test_token_counts_once_and_duplicate_is_blocked(self):
-        url=reverse('petition_detail',args=[self.petition.slug])
-        data={'name':'Student','email':'STUDENT@example.com ','supporter_type':'student','consent':'on'}
-        self.assertTrue(self.client.post(url,data).json()['ok'])
-        signature=PetitionSignature.objects.get(petition=self.petition)
-        self.assertEqual(signature.normalized_email,'student@example.com')
-        token=mail.outbox[0].body.split('/petitions/verify/')[1].split('/')[0]
-        self.assertEqual(self.client.get(reverse('petition_verify',args=[token])).status_code,200)
-        signature.refresh_from_db(); self.assertTrue(signature.is_verified); self.assertEqual(self.petition.verified_count,1)
-        self.client.get(reverse('petition_verify',args=[token]))
-        self.assertEqual(self.petition.verified_count,1)
-        self.client.session.flush()
-        duplicate=self.client.post(url,data).json()
-        self.assertTrue(duplicate['duplicate'])
-        self.assertEqual(PetitionSignature.objects.filter(petition=self.petition).count(), 1)
+    @override_settings(GOOGLE_CLIENT_ID='',TURNSTILE_SITE_KEY='',TURNSTILE_SECRET_KEY='')
+    def test_missing_production_configuration_disables_support(self):
+        response=self.client.post(self.support_url,self.support_data())
+        self.assertEqual(response.status_code,503); self.assertFalse(PetitionSignature.objects.exists())
 
     def test_expired_token_fails_safely(self):
         import hashlib
         raw = 'expired-secure-token'
         signature = PetitionSignature.objects.create(petition=self.petition,name='Student',email='expired@example.com',supporter_type='student',consent=True,verification_token=hashlib.sha256(raw.encode()).hexdigest(),token_created_at=timezone.now()-timezone.timedelta(hours=25))
         response = self.client.get(reverse('petition_verify', args=[raw]))
-        self.assertContains(response, 'expired')
+        self.assertContains(response, 'discontinued')
         signature.refresh_from_db(); self.assertFalse(signature.is_verified)
 
-    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
-    def test_resend_rotates_token_and_obscures_unknown_email(self):
-        url = reverse('petition_detail', args=[self.petition.slug])
-        self.client.post(url, {'name':'Student','email':'rotate@example.com','supporter_type':'student','consent':'on'})
-        signature = PetitionSignature.objects.get(email='rotate@example.com')
-        old = mail.outbox[-1].body.split('/petitions/verify/')[1].split('/')[0]
-        signature.resend_available_at = timezone.now()-timezone.timedelta(seconds=1); signature.save(update_fields=['resend_available_at'])
-        response = self.client.post(reverse('petition_resend', args=[self.petition.slug]), {'email':'rotate@example.com'})
-        self.assertTrue(response.json()['ok'])
-        new = mail.outbox[-1].body.split('/petitions/verify/')[1].split('/')[0]
-        self.assertNotEqual(old, new)
-        self.assertContains(self.client.get(reverse('petition_verify', args=[old])), 'invalid')
-        self.assertContains(self.client.get(reverse('petition_verify', args=[new])), 'now verified')
-        unknown = self.client.post(reverse('petition_resend', args=[self.petition.slug]), {'email':'unknown@example.com'})
-        self.assertEqual(unknown.status_code, 200)
-        self.assertNotContains(unknown, 'not found')
-
-    def test_spam_and_removed_signatures_do_not_count(self):
+    def test_legacy_verified_counts_but_pending_and_removed_do_not(self):
+        PetitionSignature.objects.create(petition=self.petition,name='Legacy',email='legacy@example.com',supporter_type='teacher',consent=True,is_verified=True,verified_at=timezone.now(),moderation_status='valid')
+        PetitionSignature.objects.create(petition=self.petition,name='Pending',email='pending@example.com',supporter_type='student',consent=True,is_verified=False,moderation_status='pending')
         PetitionSignature.objects.create(petition=self.petition,name='Spam',email='spam@example.com',supporter_type='citizen',consent=True,is_verified=True,moderation_status='spam')
         PetitionSignature.objects.create(petition=self.petition,name='Removed',email='removed@example.com',supporter_type='parent',consent=True,is_verified=True,moderation_status='removed',removed_at='2026-01-01T00:00:00Z')
-        self.assertEqual(self.petition.verified_count,0)
+        self.assertEqual(self.petition.verified_count,1)
 
     def test_compact_count(self):
         expected={999:'999',1000:'1K',1250:'1.2K',10000:'10K',100000:'100K',1000000:'1M',10000000:'10M',1000000000:'1B'}
@@ -207,7 +145,7 @@ class PetitionSystemTests(TestCase):
         draft=Petition.objects.create(title='Draft',slug='draft',short_heading='Draft',summary='Draft',primary_demand='Draft',petition_status='draft')
         self.assertEqual(self.client.get(reverse('petition_detail',args=[draft.slug])).status_code,404)
         self.petition.petition_status='closed'; self.petition.save()
-        response=self.client.post(reverse('petition_detail',args=[self.petition.slug]),{'name':'A','email':'a@example.com','supporter_type':'other','consent':'on'})
+        response=self.client.post(self.support_url,self.support_data())
         self.assertEqual(response.status_code,400)
 
 class DedicatedStoryPageTests(TestCase):

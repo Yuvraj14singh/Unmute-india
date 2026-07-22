@@ -12,12 +12,57 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
-import hashlib, logging, secrets
-from .forms import ListeningRequestForm, PetitionSignatureForm, PublicQuestionForm, VolunteerForm
+import hashlib, json, logging, secrets
+from urllib import parse, request as urllib_request
+from .forms import GooglePetitionSupportForm, ListeningRequestForm, PetitionSignatureForm, PublicQuestionForm, VolunteerForm
 from .models import AccountabilityEvent, AuthorityResponse, AuditLog, EvidenceDocument, ListeningRequest, Petition, PetitionSignature, PromiseTracker, PublicQuestion, Story, StoryReaction, StudentDemand, SupportResource
 from .utils import mask_email, request_fingerprint
 
 logger = logging.getLogger(__name__)
+
+GOOGLE_SUPPORT_UNAVAILABLE = 'Verified support is temporarily unavailable.'
+
+
+def _verify_turnstile(token, remote_ip=''):
+    payload = {'secret': settings.TURNSTILE_SECRET_KEY, 'response': token}
+    if remote_ip:
+        payload['remoteip'] = remote_ip
+    req = urllib_request.Request(
+        'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+        data=parse.urlencode(payload).encode(),
+        headers={'Content-Type': 'application/x-www-form-urlencoded'},
+        method='POST',
+    )
+    with urllib_request.urlopen(req, timeout=10) as response:
+        result = json.loads(response.read().decode())
+    if not result.get('success'):
+        raise ValueError('turnstile_invalid')
+    expected_host = parse.urlparse(settings.SITE_URL).hostname
+    returned_host = result.get('hostname')
+    if expected_host and returned_host and returned_host != expected_host:
+        raise ValueError('turnstile_hostname')
+    return {'hostname': returned_host or '', 'action': result.get('action', '')}
+
+
+def _verify_google_credential(credential):
+    from google.auth.transport import requests as google_requests
+    from google.oauth2 import id_token
+    claims = id_token.verify_oauth2_token(
+        credential,
+        google_requests.Request(),
+        settings.GOOGLE_CLIENT_ID,
+    )
+    if claims.get('iss') not in ('accounts.google.com', 'https://accounts.google.com'):
+        raise ValueError('google_issuer')
+    if not claims.get('sub') or not claims.get('email'):
+        raise ValueError('google_identity')
+    if claims.get('email_verified') is not True:
+        raise PermissionError('google_email_unverified')
+    return {
+        'sub': str(claims['sub']),
+        'email': str(claims['email']).strip().casefold(),
+        'issuer': claims['iss'],
+    }
 
 def home(request):
     return render(request, 'core/home.html', {'stories': public_stories()[:3], 'events': AccountabilityEvent.objects.order_by('-event_date')[:3], 'featured_petition':Petition.objects.filter(petition_status='published',is_featured=True).order_by('-published_at').first()})
@@ -110,74 +155,88 @@ def _issue_token(request, signature):
 
 def petition_detail(request, slug):
     petition = get_object_or_404(Petition, slug=slug, petition_status__in=['published','paused','closed'])
-    form = PetitionSignatureForm(request.POST or None)
+    form = GooglePetitionSupportForm(request.POST or None)
     if request.method == 'POST':
-        logger.info('Petition submission reached petition=%s.', petition.pk)
-        if not petition.accepts_signatures:
-            return JsonResponse({'ok':False,'message':'This petition is not accepting signatures.'}, status=400)
-        if form.is_valid():
-            email = form.cleaned_data['email'].strip().casefold()
-            existing = PetitionSignature.objects.filter(petition=petition, normalized_email=email).first()
-            if existing:
-                logger.info(
-                    'Petition signature existing signature=%s petition=%s email=%s verified=%s.',
-                    existing.pk, petition.pk, _masked_email_for_log(email), existing.is_verified,
-                )
-                PetitionSignature.objects.filter(pk=existing.pk).update(duplicate_attempts=F('duplicate_attempts') + 1)
-                if existing.is_verified:
-                    logger.info('Petition verified duplicate branch signature=%s.', existing.pk)
-                    return JsonResponse({'ok':False,'duplicate':True,'pending':False,'message':'This email has already verified support for this petition.','masked_email':mask_email(existing.email)})
-                now = timezone.now()
-                if existing.resend_available_at and now < existing.resend_available_at:
-                    remaining = max(1, int((existing.resend_available_at - now).total_seconds()))
-                    logger.info('Petition pending cooldown branch signature=%s remaining=%s.', existing.pk, remaining)
-                    return JsonResponse({'ok':False,'duplicate':True,'pending':True,'message':'Please wait five minutes before requesting another email.','masked_email':mask_email(existing.email),'cooldown_seconds':remaining,'resend_url':reverse('petition_resend', args=[petition.slug])}, status=429)
-                logger.info('Petition duplicate-pending resend branch signature=%s.', existing.pk)
-                try:
-                    _issue_token(request, existing)
-                except Exception:
-                    logger.exception('Petition pending verification resend failed signature=%s.', existing.pk)
-                    return JsonResponse({'ok':False,'pending':True,'message':'We could not send the verification email right now. Please try again.','resend_url':reverse('petition_resend', args=[petition.slug])}, status=503)
-                request.session['petition_submit_at'] = timezone.now().timestamp()
-                request.session['pending_petition_email'] = email
-                return JsonResponse({'ok':True,'message':'Verification email sent. Check your inbox and spam folder to confirm your support.','masked_email':mask_email(existing.email),'cooldown_seconds':300,'resend_url':reverse('petition_resend', args=[petition.slug])})
-            last = request.session.get('petition_submit_at', 0)
-            if timezone.now().timestamp() - last < 10:
-                return JsonResponse({'ok':False,'message':'Please wait a moment before trying again.'}, status=429)
-            signature = None
-            try:
-                with transaction.atomic():
-                    signature = form.save(commit=False)
-                    signature.petition = petition
-                    signature.normalized_email = email
-                    signature.moderation_status = 'pending'
-                    signature.ip_hash = request_fingerprint(request.META.get('REMOTE_ADDR',''), settings.SECRET_KEY)
-                    signature.user_agent_hash = request_fingerprint(request.META.get('HTTP_USER_AGENT',''), settings.SECRET_KEY)
-                    signature.save()
-                logger.info('Petition signature created signature=%s petition=%s email=%s.', signature.pk, petition.pk, _masked_email_for_log(email))
-                AuditLog.objects.create(action='Signature submitted', object_reference=f'PetitionSignature:{signature.pk}')
-                logger.info('Petition first-send branch signature=%s.', signature.pk)
-                _issue_token(request, signature)
-                request.session['petition_submit_at'] = timezone.now().timestamp()
-                request.session['pending_petition_email'] = email
-            except IntegrityError:
-                return JsonResponse({'ok':False,'duplicate':True,'message':'This email has already been submitted for this petition.'}, status=409)
-            except Exception:
-                logger.exception('Petition verification email delivery failed for signature %s.', getattr(signature, 'pk', 'unknown'))
-                return JsonResponse({
-                    'ok': False,
-                    'pending': True,
-                    'message': 'We could not send the verification email right now. Please try again.',
-                    'resend_url': reverse('petition_resend', args=[petition.slug]),
-                }, status=503)
-            return JsonResponse({'ok':True,'message':'Verification email sent. Check your inbox and spam folder to confirm your support.','masked_email':mask_email(signature.email),'cooldown_seconds':300,'resend_url':reverse('petition_resend', args=[petition.slug])})
-        logger.info('Petition form invalid petition=%s fields=%s.', petition.pk, sorted(form.errors.keys()))
-        return JsonResponse({'ok':False,'errors':form.errors.get_json_data(),'message':'Please correct the highlighted fields and try again.'}, status=400)
+        return JsonResponse({'ok':False,'message':'Email verification has been discontinued. Please use Google verification.'}, status=410)
     supporters = petition.signatures.filter(is_verified=True, verified_at__isnull=False, moderation_status='valid', is_removed=False, removed_at__isnull=True).order_by('-verified_at')[:8]
     related = Petition.objects.filter(petition_status='published').exclude(pk=petition.pk)[:3]
     canonical_url = request.build_absolute_uri(petition.get_absolute_url())
     social_image_url = request.build_absolute_uri(petition.cover_image.url) if petition.cover_image else ''
-    return render(request, 'accountability/petition_detail.html', {'petition':petition,'form':form,'verified_count':petition.verified_count,'supporters':supporters,'related_petitions':related,'canonical_url':canonical_url,'social_image_url':social_image_url})
+    verification_available = bool(settings.GOOGLE_CLIENT_ID and settings.TURNSTILE_SITE_KEY and settings.TURNSTILE_SECRET_KEY)
+    if not verification_available:
+        logger.error('Google petition support disabled: required Google/Turnstile configuration is missing.')
+    return render(request, 'accountability/petition_detail.html', {'petition':petition,'form':form,'verified_count':petition.verified_count,'supporters':supporters,'related_petitions':related,'canonical_url':canonical_url,'social_image_url':social_image_url,'google_client_id':settings.GOOGLE_CLIENT_ID,'turnstile_site_key':settings.TURNSTILE_SITE_KEY,'verification_available':verification_available,'google_support_url':reverse('google_petition_support', args=[petition.slug])})
+
+
+@require_POST
+def google_petition_support(request, slug):
+    petition = get_object_or_404(Petition, slug=slug, petition_status__in=['published','paused','closed'])
+    if not petition.accepts_signatures:
+        return JsonResponse({'ok':False,'message':'This petition is not accepting signatures.'}, status=400)
+    if not (settings.GOOGLE_CLIENT_ID and settings.TURNSTILE_SITE_KEY and settings.TURNSTILE_SECRET_KEY):
+        logger.error('Google petition support request rejected: verification configuration missing.')
+        return JsonResponse({'ok':False,'message':GOOGLE_SUPPORT_UNAVAILABLE}, status=503)
+    data = request.POST.copy()
+    data['turnstile_token'] = request.POST.get('turnstile_token') or request.POST.get('cf-turnstile-response', '')
+    form = GooglePetitionSupportForm(data)
+    if not form.is_valid():
+        return JsonResponse({'ok':False,'message':'Please complete every required field and security check.','errors':form.errors.get_json_data()}, status=400)
+    try:
+        turnstile = _verify_turnstile(form.cleaned_data['turnstile_token'], request.META.get('REMOTE_ADDR', ''))
+    except Exception as exc:
+        logger.warning('Turnstile verification failed petition=%s type=%s.', petition.pk, type(exc).__name__)
+        return JsonResponse({'ok':False,'reset_turnstile':True,'message':'We could not complete the security check. Please refresh and try again.'}, status=400)
+    try:
+        identity = _verify_google_credential(form.cleaned_data['credential'])
+    except PermissionError:
+        return JsonResponse({'ok':False,'reset_turnstile':True,'message':'This Google account does not have a verified email.'}, status=400)
+    except Exception as exc:
+        logger.warning('Google credential verification failed petition=%s type=%s.', petition.pk, type(exc).__name__)
+        return JsonResponse({'ok':False,'reset_turnstile':True,'message':'We could not verify this Google account. Please try again.'}, status=400)
+    now = timezone.now()
+    email = identity['email']
+    try:
+        with transaction.atomic():
+            duplicate = PetitionSignature.objects.select_for_update().filter(petition=petition, google_subject=identity['sub']).first()
+            if not duplicate:
+                duplicate = PetitionSignature.objects.select_for_update().filter(petition=petition, normalized_email=email, is_verified=True).first()
+            if duplicate:
+                PetitionSignature.objects.filter(pk=duplicate.pk).update(duplicate_attempts=F('duplicate_attempts') + 1)
+                AuditLog.objects.create(action='Duplicate Google support prevented', object_reference=f'PetitionSignature:{duplicate.pk}')
+                return JsonResponse({'ok':True,'duplicate':True,'message':'You have already added your verified support to this petition.','verified_count':petition.verified_count})
+            signature = PetitionSignature.objects.select_for_update().filter(petition=petition, normalized_email=email, is_verified=False).first()
+            if signature is None:
+                signature = PetitionSignature(petition=petition, email=email, normalized_email=email)
+            signature.name = form.cleaned_data['name']
+            signature.supporter_type = form.cleaned_data['supporter_type']
+            signature.consent = True
+            signature.google_subject = identity['sub']
+            signature.verified_email = email
+            signature.verification_method = 'google'
+            signature.is_verified = True
+            signature.verified = True
+            signature.verified_at = now
+            signature.google_verified_at = now
+            signature.turnstile_verified_at = now
+            signature.moderation_status = 'valid'
+            signature.is_removed = False
+            signature.removed_at = None
+            signature.ip_hash = request_fingerprint(request.META.get('REMOTE_ADDR',''), settings.SECRET_KEY)
+            signature.user_agent_hash = request_fingerprint(request.META.get('HTTP_USER_AGENT',''), settings.SECRET_KEY)
+            signature.verification_metadata = {'google_issuer':identity['issuer'],'turnstile_hostname':turnstile.get('hostname','')}
+            signature.save()
+            AuditLog.objects.create(action='Google support verified', object_reference=f'PetitionSignature:{signature.pk}')
+    except IntegrityError:
+        existing = PetitionSignature.objects.filter(petition=petition).filter(Q(google_subject=identity['sub']) | Q(normalized_email=email, is_verified=True)).first()
+        if existing:
+            return JsonResponse({'ok':True,'duplicate':True,'message':'You have already added your verified support to this petition.','verified_count':petition.verified_count})
+        logger.exception('Google petition support integrity failure petition=%s.', petition.pk)
+        return JsonResponse({'ok':False,'reset_turnstile':True,'message':'We could not verify your support right now. Your support has not been counted.'}, status=503)
+    except Exception:
+        logger.exception('Google petition support transaction failed petition=%s.', petition.pk)
+        return JsonResponse({'ok':False,'reset_turnstile':True,'message':'We could not verify your support right now. Your support has not been counted.'}, status=503)
+    petition.refresh_from_db()
+    return JsonResponse({'ok':True,'duplicate':False,'message':'Your support is verified.','verified_count':petition.verified_count,'role':signature.get_supporter_type_display(),'petition_title':petition.title})
 
 def petition_verify(request, token):
     token_hash = hashlib.sha256(token.encode()).hexdigest()
@@ -189,39 +248,15 @@ def petition_verify(request, token):
         if signature.is_verified:
             state = 'already'
             AuditLog.objects.create(action='Duplicate verification attempted', object_reference=f'PetitionSignature:{signature.pk}')
-        elif expired:
-            state = 'expired'
-            AuditLog.objects.create(action='Verification token expired', object_reference=f'PetitionSignature:{signature.pk}')
-        elif signature.is_removed or signature.removed_at or not signature.petition.accepts_signatures:
-            state = 'invalid'
         else:
-            with transaction.atomic():
-                locked = PetitionSignature.objects.select_for_update().get(pk=signature.pk)
-                if not locked.is_verified:
-                    locked.is_verified = True; locked.verified = True; locked.verified_at = timezone.now(); locked.moderation_status = 'valid'
-                    locked.save(update_fields=['is_verified','verified','verified_at','moderation_status','normalized_email'])
-                signature = locked
-            state = 'verified'
-            AuditLog.objects.create(action='Verification completed', object_reference=f'PetitionSignature:{signature.pk}')
+            state = 'discontinued'
+            AuditLog.objects.create(action='Legacy verification link opened after discontinuation', object_reference=f'PetitionSignature:{signature.pk}')
     return render(request, 'accountability/verification_result.html', {'signature':signature,'state':state,'verified_count':signature.petition.verified_count if signature else 0})
 
 @require_POST
 def petition_resend(request, slug):
-    petition = get_object_or_404(Petition, slug=slug, petition_status__in=['published','paused','closed'])
-    email = request.POST.get('email','').strip().casefold()
-    signature = PetitionSignature.objects.filter(petition=petition, normalized_email=email, is_verified=False, removed_at__isnull=True).first()
-    if not signature:
-        return JsonResponse({'ok':True,'message':'If a pending support entry exists, a verification email will be sent when eligible.'})
-    AuditLog.objects.create(action='Verification resend requested', object_reference=f'Petition:{petition.pk}')
-    if signature.resend_available_at and timezone.now() < signature.resend_available_at:
-        remaining = max(1, int((signature.resend_available_at - timezone.now()).total_seconds()))
-        return JsonResponse({'ok':False,'message':'Please wait five minutes before requesting another email.','cooldown_seconds':remaining}, status=429)
-    try:
-        _issue_token(request, signature)
-    except Exception:
-        logger.exception('Petition verification email resend failed for signature %s.', signature.pk)
-        return JsonResponse({'ok':False,'message':'The verification email could not be delivered. Please try again later.'}, status=503)
-    return JsonResponse({'ok':True,'message':'A new verification email has been sent. Please check your inbox and spam folder.','cooldown_seconds':300})
+    get_object_or_404(Petition, slug=slug, petition_status__in=['published','paused','closed'])
+    return JsonResponse({'ok':False,'message':'Email verification has been discontinued. Please use Google verification on the petition page.'}, status=410)
 
 def talk(request):
     return render(request, 'listening/start.html', {'stories': public_stories()[:3]})
@@ -319,6 +354,8 @@ def dashboard(request):
         'petition_closed': petitions.filter(petition_status='closed').count(),
         'pending_signatures': signatures.filter(is_verified=False, moderation_status='pending').count(),
         'valid_signatures': signatures.filter(is_verified=True, verified_at__isnull=False, moderation_status='valid', is_removed=False, removed_at__isnull=True).count(),
+        'google_signatures': signatures.filter(verification_method='google', is_verified=True, moderation_status='valid', is_removed=False).count(),
+        'legacy_signatures': signatures.filter(verification_method='email_legacy', is_verified=True, moderation_status='valid', is_removed=False).count(),
         'email_failures': signatures.filter(verification_email_failures__gt=0).count(),
         'resend_attempts': signatures.filter(verification_email_attempts__gt=1).count(),
         'duplicate_attempts': signatures.filter(duplicate_attempts__gt=0).count(),
