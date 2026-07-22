@@ -48,12 +48,29 @@ class PetitionSignatureForm(forms.ModelForm):
 
 
 class GooglePetitionSupportForm(forms.Form):
-    name = forms.CharField(max_length=100)
-    supporter_type = forms.ChoiceField(choices=PetitionSignature.SUPPORTER_TYPES)
+    name = forms.CharField(
+        max_length=100,
+        widget=forms.TextInput(attrs={
+            'placeholder': 'Your name',
+            'autocomplete': 'name',
+        }),
+    )
+    supporter_type = forms.ChoiceField(
+        choices=PetitionSignature.SUPPORTER_TYPES,
+        widget=forms.Select(attrs={'aria-label': 'Your role'}),
+    )
     consent = forms.BooleanField(required=True)
     credential = forms.CharField(required=True)
     turnstile_token = forms.CharField(required=True)
-    website = forms.CharField(required=False)
+    # Honeypot: it must never be visible or browser-autofilled as a user field.
+    website = forms.CharField(
+        required=False,
+        widget=forms.HiddenInput(attrs={
+            'autocomplete': 'off',
+            'tabindex': '-1',
+            'aria-hidden': 'true',
+        }),
+    )
 
     def clean_name(self):
         name = self.cleaned_data['name'].strip()

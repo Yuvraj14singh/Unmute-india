@@ -52,6 +52,7 @@ class PublicPageTests(TestCase):
         self.assertContains(response, 'cf-turnstile')
         self.assertNotContains(response, 'name="email"')
         self.assertNotContains(response, 'verification email will be sent')
+        self.assertContains(response, 'type="hidden" name="website"', html=False)
 
 class PetitionSystemTests(TestCase):
     def setUp(self):

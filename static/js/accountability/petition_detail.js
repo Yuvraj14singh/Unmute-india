@@ -17,6 +17,9 @@ if (petitionForm) {
   const googleShell = petitionForm.querySelector('[data-google-button]');
   const guidance = petitionForm.querySelector('[data-guidance]');
   const status = petitionForm.querySelector('.form-response');
+  const detailsStep = document.querySelector('[data-step-details]');
+  const humanStep = document.querySelector('[data-step-human]');
+  const googleStep = document.querySelector('[data-step-google]');
   const clientId = petitionForm.dataset.googleClientId;
   let submitting = false;
   let googleReady = false;
@@ -27,6 +30,7 @@ if (petitionForm) {
   };
   const valid = (show = false) => {
     const checks = {name: Boolean(name.value.trim()), supporter_type: Boolean(role.value), consent: consent.checked, turnstile_token: Boolean(petitionTurnstileToken)};
+    const detailsReady = checks.name && checks.supporter_type && checks.consent;
     if (show) {
       showError('name', checks.name ? '' : 'Please enter your name.');
       showError('supporter_type', checks.supporter_type ? '' : 'Select your role.');
@@ -36,7 +40,18 @@ if (petitionForm) {
     const ready = Object.values(checks).every(Boolean) && googleReady && !submitting;
     googleShell.classList.toggle('is-disabled', !ready);
     googleShell.setAttribute('aria-disabled', String(!ready));
-    guidance.textContent = ready ? 'Choose your Google account to verify your support.' : 'Complete all fields and the security check to continue.';
+    detailsStep?.classList.toggle('is-complete', detailsReady);
+    humanStep?.classList.toggle('is-complete', checks.turnstile_token);
+    detailsStep?.querySelector('small')?.replaceChildren(detailsReady ? 'Complete' : 'Pending');
+    humanStep?.querySelector('small')?.replaceChildren(checks.turnstile_token ? 'Complete' : 'Pending');
+    googleStep?.classList.toggle('is-ready', ready);
+    googleStep?.querySelector('small')?.replaceChildren(ready ? 'Ready' : 'Not counted yet');
+    if (!checks.name) guidance.textContent = 'Enter your name to begin.';
+    else if (!checks.supporter_type) guidance.textContent = 'Select your role.';
+    else if (!checks.consent) guidance.textContent = 'Confirm your consent to continue.';
+    else if (!checks.turnstile_token) guidance.textContent = 'Complete the human check.';
+    else if (!googleReady) guidance.textContent = 'Loading secure Google verification…';
+    else guidance.textContent = 'Ready — continue with Google to add your support.';
     return ready;
   };
   const resetTurnstile = () => {
@@ -59,6 +74,8 @@ if (petitionForm) {
     submitting = true;
     googleShell.classList.add('is-disabled');
     guidance.textContent = 'Verifying and adding your support…';
+    googleStep?.classList.add('is-working');
+    googleStep?.querySelector('small')?.replaceChildren('Verifying…');
     status.textContent = '';
     const payload = new FormData(petitionForm);
     payload.set('credential', credential);
@@ -83,6 +100,7 @@ if (petitionForm) {
       resetTurnstile();
     } finally {
       submitting = false;
+      googleStep?.classList.remove('is-working');
       valid();
     }
   };
