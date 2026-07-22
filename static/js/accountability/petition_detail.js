@@ -1,20 +1,30 @@
 const petitionForm = document.querySelector('[data-petition-form]');
 let petitionTurnstileToken = '';
+let googleInitialized = false;
+let googleButtonRendered = false;
+let googleLoadAttempts = 0;
 
-window.petitionTurnstileReady = token => {
-  petitionTurnstileToken = token;
+const notifyVerificationChange = () => {
   window.dispatchEvent(new Event('petition-verification-change'));
 };
+
+window.petitionTurnstileReady = token => {
+  if (!token || token === petitionTurnstileToken) return;
+  petitionTurnstileToken = token;
+  notifyVerificationChange();
+};
+
 window.petitionTurnstileExpired = () => {
+  if (!petitionTurnstileToken) return;
   petitionTurnstileToken = '';
-  window.dispatchEvent(new Event('petition-verification-change'));
+  notifyVerificationChange();
 };
 
 if (petitionForm) {
   const name = petitionForm.querySelector('[name=name]');
   const role = petitionForm.querySelector('[name=supporter_type]');
   const consent = petitionForm.querySelector('[name=consent]');
-  const googleShell = petitionForm.querySelector('[data-google-button]');
+  const googleShell = petitionForm.querySelector('#google-signin-button');
   const guidance = petitionForm.querySelector('[data-guidance]');
   const status = petitionForm.querySelector('.form-response');
   const activeStep = document.querySelector('[data-active-step]');
@@ -26,6 +36,7 @@ if (petitionForm) {
   const clientId = petitionForm.dataset.googleClientId;
   let submitting = false;
   let googleReady = false;
+  let currentUiState = '';
 
   name.setAttribute('aria-describedby', 'name-error');
   role.setAttribute('aria-describedby', 'role-error');
@@ -34,7 +45,7 @@ if (petitionForm) {
   const showError = (field, message) => {
     const target = petitionForm.querySelector(`[data-error="${field}"]`);
     const control = field === 'name' ? name : field === 'supporter_type' ? role : field === 'consent' ? consent : null;
-    if (target) target.textContent = message;
+    if (target && target.textContent !== message) target.textContent = message;
     if (control) control.setAttribute('aria-invalid', String(Boolean(message)));
   };
 
@@ -57,6 +68,10 @@ if (petitionForm) {
       showError('turnstile_token', checks.turnstile_token ? '' : 'Please complete the human check.');
     }
 
+    const nextUiState = [detailsComplete, checks.turnstile_token, googleReady, submitting].join(':');
+    if (nextUiState === currentUiState) return ready;
+    currentUiState = nextUiState;
+
     steps.details?.classList.toggle('is-complete', detailsComplete);
     steps.human?.classList.toggle('is-complete', checks.turnstile_token);
     steps.google?.classList.toggle('is-active', detailsComplete && checks.turnstile_token);
@@ -72,6 +87,9 @@ if (petitionForm) {
     } else if (!googleReady) {
       activeStep.textContent = 'Loading Google verification';
       guidance.textContent = 'Loading secure Google verification…';
+    } else if (submitting) {
+      activeStep.textContent = 'Verifying your support';
+      guidance.textContent = 'Verifying your support…';
     } else {
       activeStep.textContent = 'Verify with Google';
       guidance.textContent = 'Continue with Google to add your support.';
@@ -81,6 +99,7 @@ if (petitionForm) {
 
   const resetTurnstile = () => {
     petitionTurnstileToken = '';
+    currentUiState = '';
     if (window.turnstile) window.turnstile.reset();
     validate();
   };
@@ -101,8 +120,8 @@ if (petitionForm) {
   const submitCredential = async credential => {
     if (submitting || !validate(true)) return;
     submitting = true;
-    googleShell.classList.add('is-disabled');
-    guidance.textContent = 'Verifying your support…';
+    currentUiState = '';
+    validate();
     status.className = 'form-response';
     status.textContent = '';
     const payload = new FormData(petitionForm);
@@ -132,38 +151,59 @@ if (petitionForm) {
       resetTurnstile();
     } finally {
       submitting = false;
+      currentUiState = '';
       validate();
     }
   };
 
+  const showGoogleLoadError = () => {
+    if (googleInitialized || googleButtonRendered) return;
+    status.textContent = 'Google verification could not load. Please refresh and try again.';
+    status.className = 'form-response show error';
+    guidance.textContent = 'Google verification could not load.';
+  };
+
   const initialiseGoogle = () => {
-    if (!window.google?.accounts?.id) return window.setTimeout(initialiseGoogle, 100);
+    if (googleInitialized || googleButtonRendered) return;
+    if (!window.google?.accounts?.id) {
+      googleLoadAttempts += 1;
+      if (googleLoadAttempts >= 100) return showGoogleLoadError();
+      window.setTimeout(initialiseGoogle, 100);
+      return;
+    }
+
+    googleInitialized = true;
     window.google.accounts.id.initialize({
       client_id: clientId,
       ux_mode: 'popup',
-      use_fedcm_for_button: true,
       callback: response => {
         if (!response?.credential) {
-          status.textContent = 'Google verification was not completed. Please try again.';
+          status.textContent = 'Google verification was not completed.';
           status.className = 'form-response show error';
           return;
         }
         submitCredential(response.credential);
       },
     });
-    window.google.accounts.id.renderButton(googleShell, {
-      theme: 'outline',
-      size: 'large',
-      type: 'standard',
-      shape: 'pill',
-      text: 'continue_with',
-      width: Math.min(360, Math.max(260, googleShell.clientWidth || 320)),
-      click_listener: () => {
-        status.className = 'form-response';
-        status.textContent = '';
-      },
-    });
+
+    if (!googleButtonRendered) {
+      window.google.accounts.id.renderButton(googleShell, {
+        theme: 'outline',
+        size: 'large',
+        type: 'standard',
+        shape: 'pill',
+        text: 'continue_with',
+        width: Math.min(360, Math.max(260, googleShell.clientWidth || 320)),
+        click_listener: () => {
+          status.className = 'form-response';
+          status.textContent = '';
+        },
+      });
+      googleButtonRendered = true;
+    }
+
     googleReady = true;
+    currentUiState = '';
     validate();
   };
 

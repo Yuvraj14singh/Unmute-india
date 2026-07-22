@@ -4,6 +4,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from unittest.mock import patch
+from pathlib import Path
 from .forms import GooglePetitionSupportForm
 from .models import ListeningRequest, Petition, PetitionSignature, PublicQuestion, Story
 from .utils import compact_count
@@ -55,6 +56,26 @@ class PublicPageTests(TestCase):
         self.assertNotContains(response, 'verified-email-row')
         self.assertNotContains(response, 'form-response show')
         self.assertContains(response, 'type="hidden" name="website"', html=False)
+
+    @override_settings(GOOGLE_CLIENT_ID='client', TURNSTILE_SITE_KEY='site', TURNSTILE_SECRET_KEY='secret')
+    def test_petition_google_button_has_one_stable_container_and_script(self):
+        petition=Petition.objects.filter(petition_status='published').first()
+        response=self.client.get(reverse('petition_detail',args=[petition.slug]))
+        self.assertContains(response, 'id="google-signin-button"', count=1)
+        self.assertContains(response, 'https://accounts.google.com/gsi/client', count=1)
+
+    def test_google_frontend_is_single_render_and_has_no_fedcm_button_mode(self):
+        source=(Path(__file__).resolve().parent.parent / 'static/js/accountability/petition_detail.js').read_text()
+        self.assertIn('let googleInitialized = false', source)
+        self.assertIn('let googleButtonRendered = false', source)
+        self.assertIn('if (googleInitialized || googleButtonRendered) return', source)
+        self.assertNotIn('use_fedcm_for_button', source)
+
+    def test_google_button_css_is_stable_and_clickable(self):
+        source=(Path(__file__).resolve().parent.parent / 'static/css/accountability/petition_detail.css').read_text()
+        self.assertIn('.google-button-shell>div,.google-button-shell iframe', source)
+        self.assertIn('pointer-events:auto!important', source)
+        self.assertIn('animation:none!important', source)
 
 class PetitionSystemTests(TestCase):
     def setUp(self):
