@@ -64,12 +64,14 @@ class PublicPageTests(TestCase):
         self.assertContains(response, 'id="google-signin-button"', count=1)
         self.assertContains(response, 'https://accounts.google.com/gsi/client', count=1)
 
-    def test_google_frontend_is_single_render_and_has_no_fedcm_button_mode(self):
+    def test_google_frontend_is_single_render_and_uses_mobile_safe_popup_mode(self):
         source=(Path(__file__).resolve().parent.parent / 'static/js/accountability/petition_detail.js').read_text()
         self.assertIn('let googleInitialized = false', source)
         self.assertIn('let googleButtonRendered = false', source)
         self.assertIn('if (googleInitialized || googleButtonRendered) return', source)
-        self.assertNotIn('use_fedcm_for_button', source)
+        self.assertIn('use_fedcm_for_button: false', source)
+        self.assertIn('itp_support: true', source)
+        self.assertIn('googleShell.getBoundingClientRect().width', source)
 
     def test_google_button_css_is_stable_and_clickable(self):
         source=(Path(__file__).resolve().parent.parent / 'static/css/accountability/petition_detail.css').read_text()

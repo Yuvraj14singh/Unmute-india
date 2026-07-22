@@ -176,6 +176,8 @@ if (petitionForm) {
     window.google.accounts.id.initialize({
       client_id: clientId,
       ux_mode: 'popup',
+      use_fedcm_for_button: false,
+      itp_support: true,
       callback: response => {
         if (!response?.credential) {
           status.textContent = 'Google verification was not completed.';
@@ -187,13 +189,16 @@ if (petitionForm) {
     });
 
     if (!googleButtonRendered) {
+      const availableWidth = Math.floor(googleShell.getBoundingClientRect().width);
+      const buttonWidth = Math.min(400, Math.max(200, availableWidth || 280));
       window.google.accounts.id.renderButton(googleShell, {
         theme: 'outline',
         size: 'large',
         type: 'standard',
         shape: 'pill',
         text: 'continue_with',
-        width: Math.min(360, Math.max(260, googleShell.clientWidth || 320)),
+        logo_alignment: 'left',
+        width: String(buttonWidth),
         click_listener: () => {
           status.className = 'form-response';
           status.textContent = '';
