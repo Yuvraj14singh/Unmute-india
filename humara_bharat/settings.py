@@ -13,8 +13,8 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 from pathlib import Path
 from importlib.util import find_spec
 import os
+import warnings
 
-from django.core.exceptions import ImproperlyConfigured
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -226,11 +226,12 @@ if os.environ.get('RENDER'):
     if EMAIL_BACKEND.endswith('console.EmailBackend'):
         missing_email_settings.append('EMAIL_BACKEND (must use SMTP in production)')
     if missing_email_settings:
-        raise ImproperlyConfigured(
-            'Production petition email is not configured: ' + ', '.join(missing_email_settings)
+        warnings.warn(
+            'Production petition email is not configured: ' + ', '.join(missing_email_settings),
+            RuntimeWarning,
         )
     if EMAIL_USE_TLS and EMAIL_USE_SSL:
-        raise ImproperlyConfigured('Enable only one of EMAIL_USE_TLS or EMAIL_USE_SSL.')
+        warnings.warn('Enable only one of EMAIL_USE_TLS or EMAIL_USE_SSL.', RuntimeWarning)
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
