@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.core import mail
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from unittest.mock import patch
 from .forms import PetitionSignatureForm
 from .models import ListeningRequest, Petition, PetitionSignature, PublicQuestion, Story
 from .utils import compact_count
@@ -65,6 +66,18 @@ class PetitionSystemTests(TestCase):
         form=PetitionSignatureForm({'name':'  ','email':'bad','supporter_type':'','consent':''})
         self.assertFalse(form.is_valid())
         self.assertTrue({'name','email','supporter_type','consent'}.issubset(form.errors))
+
+    @patch('indiaApp.views._petition_email', side_effect=ConnectionError('SMTP unavailable'))
+    def test_email_failure_is_not_reported_as_success(self, mocked_email):
+        response = self.client.post(reverse('petition_detail', args=[self.petition.slug]), {
+            'name': 'Student', 'email': 'pending@example.com',
+            'supporter_type': 'student', 'consent': 'on',
+        })
+        self.assertEqual(response.status_code, 503)
+        payload = response.json()
+        self.assertFalse(payload['ok'])
+        self.assertTrue(payload['pending'])
+        self.assertEqual(PetitionSignature.objects.get().is_verified, False)
 
     @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
     def test_token_counts_once_and_duplicate_is_blocked(self):

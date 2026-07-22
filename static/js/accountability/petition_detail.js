@@ -44,11 +44,12 @@ if (form) {
         button.textContent = 'Add My Support';
         validate();
         if (data.pending && data.resend_url) {
+          const pendingEmail = email.value.trim();
           const resend = document.createElement('button');
           resend.type = 'button'; resend.className = 'resend-link'; resend.textContent = 'Resend Verification Email';
           resend.addEventListener('click', async () => {
             resend.disabled = true; resend.textContent = 'Sending…';
-            const payload = new FormData(); payload.append('email', email.value.trim()); payload.append('csrfmiddlewaretoken', csrf);
+            const payload = new FormData(); payload.append('email', pendingEmail); payload.append('csrfmiddlewaretoken', csrf);
             const sent = await fetch(data.resend_url, {method: 'POST', body: payload});
             const sentData = await sent.json(); response.textContent = sentData.message; resend.remove();
           });

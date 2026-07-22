@@ -2,6 +2,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
+from django.core.exceptions import ImproperlyConfigured
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from django.core.paginator import Paginator
@@ -11,10 +12,12 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
-import hashlib, secrets
+import hashlib, logging, secrets
 from .forms import ListeningRequestForm, PetitionSignatureForm, PublicQuestionForm, VolunteerForm
 from .models import AccountabilityEvent, AuthorityResponse, AuditLog, EvidenceDocument, ListeningRequest, Petition, PetitionSignature, PromiseTracker, PublicQuestion, Story, StoryReaction, StudentDemand, SupportResource
 from .utils import request_fingerprint
+
+logger = logging.getLogger(__name__)
 
 def home(request):
     return render(request, 'core/home.html', {'stories': public_stories()[:3], 'events': AccountabilityEvent.objects.order_by('-event_date')[:3], 'featured_petition':Petition.objects.filter(petition_status='published',is_featured=True).order_by('-published_at').first()})
@@ -46,6 +49,8 @@ def accountability(request):
     return render(request, 'core/accountability.html', context)
 
 def _petition_email(request, signature, raw_token):
+    if not settings.DEBUG and settings.EMAIL_BACKEND.endswith('console.EmailBackend'):
+        raise ImproperlyConfigured('A real email backend is required for petition verification.')
     verify_url = request.build_absolute_uri(reverse('petition_verify', args=[raw_token]))
     context = {'name':signature.name, 'petition':signature.petition, 'verification_url':verify_url}
     subject = f'Confirm your support for: {signature.petition.title}'
@@ -53,7 +58,9 @@ def _petition_email(request, signature, raw_token):
     html = render_to_string('accountability/email/verify.html', context)
     email = EmailMultiAlternatives(subject, text, settings.DEFAULT_FROM_EMAIL, [signature.email])
     email.attach_alternative(html, 'text/html')
-    email.send()
+    sent = email.send(fail_silently=False)
+    if sent != 1:
+        raise RuntimeError('The verification email provider did not accept the message.')
 
 def _issue_token(request, signature):
     raw = secrets.token_urlsafe(32)
@@ -77,6 +84,7 @@ def petition_detail(request, slug):
             if existing:
                 message = 'You have already supported this petition.' if existing.is_verified else 'Your support is waiting for email verification. Please check your inbox.'
                 return JsonResponse({'ok':False,'duplicate':True,'pending':not existing.is_verified,'message':message,'resend_url':reverse('petition_resend', args=[petition.slug])})
+            signature = None
             try:
                 with transaction.atomic():
                     signature = form.save(commit=False)
@@ -91,6 +99,14 @@ def petition_detail(request, slug):
                 request.session['pending_petition_email'] = email
             except IntegrityError:
                 return JsonResponse({'ok':False,'duplicate':True,'message':'This email has already been submitted for this petition.'}, status=409)
+            except Exception:
+                logger.exception('Petition verification email delivery failed for signature %s.', getattr(signature, 'pk', 'unknown'))
+                return JsonResponse({
+                    'ok': False,
+                    'pending': True,
+                    'message': 'Your support was saved, but the verification email could not be delivered. Please try Resend Verification Email after a few minutes.',
+                    'resend_url': reverse('petition_resend', args=[petition.slug]),
+                }, status=503)
             return JsonResponse({'ok':True,'message':'Check your email to confirm your support.\n\nYour signature will be counted only after you click the verification link.'})
         return JsonResponse({'ok':False,'errors':form.errors.get_json_data()}, status=400)
     supporters = petition.signatures.filter(is_verified=True, moderation_status='valid', removed_at__isnull=True).order_by('-verified_at')[:8]
@@ -126,7 +142,11 @@ def petition_resend(request, slug):
     if not signature: return JsonResponse({'ok':False,'message':'No pending signature was found.'}, status=404)
     if signature.token_created_at and timezone.now() < signature.token_created_at + timezone.timedelta(minutes=5):
         return JsonResponse({'ok':False,'message':'Please wait five minutes before requesting another email.'}, status=429)
-    _issue_token(request, signature)
+    try:
+        _issue_token(request, signature)
+    except Exception:
+        logger.exception('Petition verification email resend failed for signature %s.', signature.pk)
+        return JsonResponse({'ok':False,'message':'The verification email could not be delivered. Please try again later.'}, status=503)
     return JsonResponse({'ok':True,'message':'A new verification email has been sent.'})
 
 def talk(request):
