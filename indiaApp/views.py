@@ -58,8 +58,9 @@ def _petition_email(request, signature, raw_token):
     subject = f'Verify your support for {signature.petition.title} | Unmute India'
     text = render_to_string('emails/petition_verification.txt', context)
     html = render_to_string('emails/petition_verification.html', context)
-    email = EmailMultiAlternatives(subject, text, settings.DEFAULT_FROM_EMAIL, [signature.email])
+    email = EmailMultiAlternatives(subject, text, settings.DEFAULT_FROM_EMAIL, [signature.normalized_email])
     email.attach_alternative(html, 'text/html')
+    logger.info('Verification email attempt started signature=%s petition=%s.', signature.pk, signature.petition_id)
     sent = email.send(fail_silently=False)
     if sent != 1:
         raise RuntimeError('The verification email provider did not accept the message.')
@@ -126,10 +127,10 @@ def petition_detail(request, slug):
                 return JsonResponse({
                     'ok': False,
                     'pending': True,
-                    'message': 'Your support was saved, but the verification email could not be delivered. Please try Resend Verification Email after a few minutes.',
+                    'message': 'We could not send the verification email right now. Please try again.',
                     'resend_url': reverse('petition_resend', args=[petition.slug]),
                 }, status=503)
-            return JsonResponse({'ok':True,'message':'Check your inbox.','masked_email':mask_email(signature.email),'cooldown_seconds':300,'resend_url':reverse('petition_resend', args=[petition.slug])})
+            return JsonResponse({'ok':True,'message':'Verification email sent. Check your inbox and spam folder to confirm your support.','masked_email':mask_email(signature.email),'cooldown_seconds':300,'resend_url':reverse('petition_resend', args=[petition.slug])})
         return JsonResponse({'ok':False,'errors':form.errors.get_json_data()}, status=400)
     supporters = petition.signatures.filter(is_verified=True, verified_at__isnull=False, moderation_status='valid', is_removed=False, removed_at__isnull=True).order_by('-verified_at')[:8]
     related = Petition.objects.filter(petition_status='published').exclude(pk=petition.pk)[:3]

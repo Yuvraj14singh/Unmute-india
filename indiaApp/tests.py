@@ -44,7 +44,7 @@ class PublicPageTests(TestCase):
         self.assertRedirects(response, reverse('accountability'))
         self.assertFalse(PublicQuestion.objects.get().approved)
 
-    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend', SITE_URL='https://unmute.example')
     def test_petition_signature_requires_email_verification(self):
         petition=Petition.objects.filter(petition_status='published').first()
         response=self.client.post(reverse('petition_detail',args=[petition.slug]),{'name':'A Student','email':'student@example.com','supporter_type':'student','consent':'on'})
@@ -53,6 +53,11 @@ class PublicPageTests(TestCase):
         self.assertFalse(signature.is_verified)
         self.assertEqual(petition.verified_count,0)
         self.assertEqual(len(mail.outbox),1)
+        self.assertEqual(mail.outbox[0].to, ['student@example.com'])
+        self.assertEqual(mail.outbox[0].subject, f'Verify your support for {petition.title} | Unmute India')
+        self.assertIn('https://unmute.example/petitions/verify/', mail.outbox[0].body)
+        self.assertNotIn('localhost', mail.outbox[0].body)
+        self.assertNotContains(response, 'Please wait five minutes')
 
 class PetitionSystemTests(TestCase):
     def setUp(self):
@@ -95,6 +100,7 @@ class PetitionSystemTests(TestCase):
         self.client.session.flush()
         duplicate=self.client.post(url,data).json()
         self.assertTrue(duplicate['duplicate'])
+        self.assertEqual(PetitionSignature.objects.filter(petition=self.petition).count(), 1)
 
     def test_expired_token_fails_safely(self):
         import hashlib
