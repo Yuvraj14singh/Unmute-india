@@ -29,7 +29,10 @@ SECRET_KEY = os.environ.get(
 )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'True').lower() in ('1', 'true', 'yes')
+DEBUG = os.environ.get(
+    'DEBUG',
+    'False' if os.environ.get('RENDER') else 'True',
+).lower() in ('1', 'true', 'yes')
 
 ALLOWED_HOSTS = [
     host.strip()
@@ -193,6 +196,7 @@ EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() in ('1','true','yes')
+EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '20'))
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'Unmute India <noreply@localhost>')
 PETITION_VERIFICATION_EXPIRY_HOURS = int(os.environ.get('PETITION_VERIFICATION_EXPIRY_HOURS', '48'))
 
