@@ -329,7 +329,7 @@ def stories(request):
     return render(request, 'stories/feed.html', {'stories':queryset[:12], 'featured_stories':queryset.filter(featured=True)[:3]})
 
 def public_stories():
-    return Story.objects.filter(approved=True, moderation_status='published', public_consent=True, privacy_review_complete=True, removed_at__isnull=True).annotate(reaction_count=Count('reactions', distinct=True), comment_count=Count('comments', filter=Q(comments__approved=True,comments__status='approved',comments__removed_at__isnull=True), distinct=True)).order_by('-featured','-published_at','-created_at')
+    return Story.objects.filter(approved=True, moderation_status='published', public_consent=True, privacy_review_complete=True, removed_at__isnull=True).filter(Q(source_listening_request__isnull=True)|Q(source_listening_request__public_sharing_consent=True,source_listening_request__public_consent_withdrawn_at__isnull=True)).annotate(reaction_count=Count('reactions', distinct=True), comment_count=Count('comments', filter=Q(comments__approved=True,comments__status='approved',comments__removed_at__isnull=True), distinct=True)).order_by('-featured','-published_at','-created_at')
 
 def story_format_page(request, story_format):
     templates={'text':'stories/text_stories.html','voice':'stories/voice_stories.html','video':'stories/video_stories.html'}

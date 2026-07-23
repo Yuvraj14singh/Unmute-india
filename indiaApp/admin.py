@@ -37,8 +37,24 @@ class ListeningRequestAdmin(admin.ModelAdmin):
             path('<path:object_id>/preview/',self.admin_site.admin_view(self.preview_view),name='indiaApp_listeningrequest_preview'),
             path('<path:object_id>/publish/',self.admin_site.admin_view(self.publish_view),name='indiaApp_listeningrequest_publish'),
             path('<path:object_id>/unpublish/',self.admin_site.admin_view(self.unpublish_view),name='indiaApp_listeningrequest_unpublish'),
+            path('<path:object_id>/keep-private/',self.admin_site.admin_view(self.keep_private_view),name='indiaApp_listeningrequest_keep_private'),
+            path('<path:object_id>/reject-public/',self.admin_site.admin_view(self.reject_public_view),name='indiaApp_listeningrequest_reject_public'),
         ]
         return custom+urls
+
+    def changeform_view(self,request,object_id=None,form_url='',extra_context=None):
+        item=self.get_object(request,object_id) if object_id else None
+        reasons=[]
+        if item:
+            if not item.public_sharing_consent: reasons.append('This submission does not have public-sharing consent.')
+            if not item.privacy_review_complete: reasons.append('Complete the privacy review before publishing.')
+            if item.safety_flag: reasons.append('This item is safety-flagged and cannot be published.')
+            if item.kind not in ('text','audio','video'): reasons.append('This submission format cannot be published.')
+            if item.kind=='text' and not item.message.strip(): reasons.append('Add valid text content before publishing.')
+            if item.kind in ('audio','video') and not item.media: reasons.append(f'Attach a valid {item.get_kind_display().lower()} file before publishing.')
+            if not self.has_change_permission(request,item): reasons.append('Your staff account does not have permission to publish.')
+        context={**(extra_context or {}),'publication_reasons':reasons,'publication_eligible':bool(item and not reasons)}
+        return super().changeform_view(request,object_id,form_url,context)
 
     def changelist_view(self,request,extra_context=None):
         qs=self.get_queryset(request)
@@ -85,7 +101,7 @@ class ListeningRequestAdmin(admin.ModelAdmin):
 
     def _eligible(self,item):
         valid_content=bool(item.message.strip()) if item.kind=='text' else bool(item.media)
-        return item.public_sharing_consent and item.privacy_review_complete and not item.safety_flag and valid_content
+        return item.kind in ('text','audio','video') and item.public_sharing_consent and item.privacy_review_complete and not item.safety_flag and valid_content
 
     def _publish(self,request,item):
         if not self.has_change_permission(request,item) or not self._eligible(item): return False,'Consent, safety or content requirements are not complete.'
@@ -192,6 +208,32 @@ class ListeningRequestAdmin(admin.ModelAdmin):
             ok=self._unpublish(request,item,request.POST.get('reason','')); self.message_user(request,'Public post unpublished; private submission preserved.' if ok else 'This item could not be unpublished.',messages.SUCCESS if ok else messages.ERROR)
             return HttpResponseRedirect(reverse('admin:indiaApp_listeningrequest_change',args=[item.pk]))
         return render(request,'admin/indiaApp/listeningrequest/confirm_action.html',{'item':item,'action_name':'Unpublish','prompt':'Remove this voice from public view?','warning':'The original private submission and audit history will remain stored.','require_reason':True,'opts':self.model._meta})
+
+    def _private_decision(self,request,item,status,label,reason=''):
+        if not self.has_change_permission(request,item): raise PermissionDenied
+        previous=item.publication_status
+        if item.publication_status=='published':
+            self._unpublish(request,item,reason or label)
+            item.refresh_from_db()
+        item.publication_status=status; item.reviewed_by=request.user; item.reviewed_at=timezone.now()
+        item.save(update_fields=('publication_status','reviewed_by','reviewed_at','updated_at'))
+        AuditLog.objects.create(actor=request.user,action=f'{label} ListeningRequest ({previous} → {status}){": "+reason[:60] if reason else ""}',object_reference=f'ListeningRequest:{item.pk}:Story:{item.published_story_id or "none"}')
+
+    def keep_private_view(self,request,object_id):
+        item=get_object_or_404(ListeningRequest,pk=object_id)
+        if request.method=='POST':
+            self._private_decision(request,item,'private','Kept private',request.POST.get('reason',''))
+            self.message_user(request,'Submission marked private-only. No private content was deleted.',messages.SUCCESS)
+            return HttpResponseRedirect(reverse('admin:indiaApp_listeningrequest_change',args=[item.pk]))
+        return render(request,'admin/indiaApp/listeningrequest/confirm_action.html',{'item':item,'action_name':'Keep Private','prompt':'Keep this submission private-only?','warning':'It will not appear in Unmuted Voices. The protected source record remains available to authorised staff.','opts':self.model._meta})
+
+    def reject_public_view(self,request,object_id):
+        item=get_object_or_404(ListeningRequest,pk=object_id)
+        if request.method=='POST':
+            self._private_decision(request,item,'rejected','Rejected public sharing',request.POST.get('reason',''))
+            self.message_user(request,'Public sharing rejected; the private submission was preserved.',messages.SUCCESS)
+            return HttpResponseRedirect(reverse('admin:indiaApp_listeningrequest_change',args=[item.pk]))
+        return render(request,'admin/indiaApp/listeningrequest/confirm_action.html',{'item':item,'action_name':'Reject Public Sharing','prompt':'Reject this public-sharing request?','warning':'This does not delete or expose the private submission.','require_reason':True,'opts':self.model._meta})
 
 @admin.register(Petition)
 class PetitionAdmin(admin.ModelAdmin):

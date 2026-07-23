@@ -10,5 +10,25 @@
 {{ block.super }}
 {% endblock %}
 {% block after_field_sets %}
-{% if original %}<section class="audit-summary"><h2>Audit trail</h2><dl><div><dt>Created</dt><dd>{{ original.created_at }}</dd></div><div><dt>Reviewed</dt><dd>{{ original.reviewed_at|default:"Not reviewed" }}</dd></div><div><dt>Reviewed by</dt><dd>{{ original.reviewed_by|default:"Not assigned" }}</dd></div><div><dt>Publication</dt><dd>{{ original.get_publication_status_display }}</dd></div></dl></section>{% endif %}
+{% if original %}
+<section class="publication-action-panel" aria-labelledby="public-actions-title">
+  <div class="action-panel-heading"><div><p class="workspace-eyebrow">STAFF-CONTROLLED WORKFLOW</p><h2 id="public-actions-title">Public Sharing Actions</h2><p>Publishing never happens from consent alone. Complete every safety and privacy check first.</p></div><span class="admin-badge publication-{{ original.publication_status }}">{{ original.get_publication_status_display }}</span></div>
+  <dl class="publication-state">
+    <div><dt>Consent</dt><dd class="{{ original.public_sharing_consent|yesno:'state-good,state-muted' }}">{{ original.public_sharing_consent|yesno:"Yes,No" }}</dd></div>
+    <div><dt>Privacy review</dt><dd class="{{ original.privacy_review_complete|yesno:'state-good,state-warning' }}">{{ original.privacy_review_complete|yesno:"Complete,Incomplete" }}</dd></div>
+    <div><dt>Safety</dt><dd class="{{ original.safety_flag|yesno:'state-danger,state-good' }}">{{ original.safety_flag|yesno:"Flagged,Clear" }}</dd></div>
+    <div><dt>Publication</dt><dd>{{ original.get_publication_status_display }}</dd></div>
+    <div><dt>Linked public post</dt><dd>{% if original.published_story and original.publication_status == 'published' %}<a href="{% url 'story_detail' original.published_story.slug %}">View public post ↗</a>{% else %}Not published{% endif %}</dd></div>
+  </dl>
+  {% if publication_reasons %}<div class="eligibility-reasons" role="status"><strong>Approve &amp; Publish is unavailable:</strong><ul>{% for reason in publication_reasons %}<li>{{ reason }}</li>{% endfor %}</ul></div>{% endif %}
+  <div class="publication-buttons">
+    {% if publication_eligible and original.publication_status != 'published' %}<a class="button default" href="{% url 'admin:indiaApp_listeningrequest_publish' original.pk %}">Approve &amp; Publish</a>{% else %}<button class="button default" type="button" disabled aria-disabled="true">Approve &amp; Publish</button>{% endif %}
+    <a class="button" href="{% url 'admin:indiaApp_listeningrequest_keep_private' original.pk %}">Keep Private</a>
+    <a class="button reject" href="{% url 'admin:indiaApp_listeningrequest_reject_public' original.pk %}">Reject Public Sharing</a>
+    {% if original.publication_status == 'published' %}<a class="button danger" href="{% url 'admin:indiaApp_listeningrequest_unpublish' original.pk %}">Unpublish</a>{% else %}<button class="button danger" type="button" disabled aria-disabled="true">Unpublish</button>{% endif %}
+    <a class="button" href="{% url 'admin:indiaApp_listeningrequest_preview' original.pk %}">Preview Public Post</a>
+  </div>
+</section>
+<section class="audit-summary"><h2>Audit trail</h2><dl><div><dt>Created</dt><dd>{{ original.created_at }}</dd></div><div><dt>Reviewed</dt><dd>{{ original.reviewed_at|default:"Not reviewed" }}</dd></div><div><dt>Reviewed by</dt><dd>{{ original.reviewed_by|default:"Not assigned" }}</dd></div><div><dt>Publication</dt><dd>{{ original.get_publication_status_display }}</dd></div></dl></section>
+{% endif %}
 {% endblock %}

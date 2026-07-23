@@ -326,6 +326,24 @@ class AdminPublicationWorkspaceTests(TestCase):
         item.refresh_from_db()
         self.assertIsNone(item.published_story_id)
 
+    def test_cannot_publish_without_privacy_review_or_when_safety_flagged(self):
+        incomplete=self.request(privacy_review_complete=False)
+        flagged=self.request(safety_flag=True)
+        for item in (incomplete,flagged):
+            response=self.client.post(reverse('admin:indiaApp_listeningrequest_publish',args=[item.pk]),follow=True)
+            self.assertEqual(response.status_code,200)
+            item.refresh_from_db()
+            self.assertIsNone(item.published_story_id)
+        detail=self.client.get(reverse('admin:indiaApp_listeningrequest_change',args=[incomplete.pk]))
+        self.assertContains(detail,'Complete the privacy review before publishing.')
+        self.assertContains(detail,'Approve &amp; Publish')
+
+    def test_detail_page_has_all_public_sharing_actions_and_readable_state(self):
+        item=self.request()
+        response=self.client.get(reverse('admin:indiaApp_listeningrequest_change',args=[item.pk]))
+        for label in ('Public Sharing Actions','Approve &amp; Publish','Keep Private','Reject Public Sharing','Unpublish','Preview Public Post','Not published'):
+            self.assertContains(response,label)
+
     def test_text_audio_and_video_map_to_public_formats(self):
         items=[
             self.request(kind='text'),
@@ -347,6 +365,23 @@ class AdminPublicationWorkspaceTests(TestCase):
         self.assertEqual(Story.objects.count(),1)
         self.assertIsNotNone(item.published_story_id)
         self.assertTrue(AuditLog.objects.filter(actor=self.staff,object_reference__contains=f'ListeningRequest:{item.pk}').exists())
+
+    def test_anonymous_and_comment_preferences_are_preserved(self):
+        item=self.request(anonymous=True,comment_preference='none')
+        self.client.post(reverse('admin:indiaApp_listeningrequest_publish',args=[item.pk]))
+        item.refresh_from_db()
+        self.assertEqual(item.published_story.display_name,'Anonymous Student')
+        self.assertEqual(item.published_story.comment_mode,'none')
+
+    def test_keep_private_and_reject_create_audit_entries(self):
+        private=self.request(); rejected=self.request()
+        self.client.post(reverse('admin:indiaApp_listeningrequest_keep_private',args=[private.pk]))
+        self.client.post(reverse('admin:indiaApp_listeningrequest_reject_public',args=[rejected.pk]),{'reason':'Privacy concerns'})
+        private.refresh_from_db(); rejected.refresh_from_db()
+        self.assertEqual(private.publication_status,'private')
+        self.assertEqual(rejected.publication_status,'rejected')
+        self.assertTrue(AuditLog.objects.filter(action__startswith='Kept private').exists())
+        self.assertTrue(AuditLog.objects.filter(action__startswith='Rejected public sharing').exists())
 
     def test_unpublish_hides_public_post_and_preserves_private_source(self):
         item=self.request()
