@@ -47,7 +47,6 @@ class ListeningRequestAdmin(admin.ModelAdmin):
         reasons=[]
         if item:
             if not item.public_sharing_consent: reasons.append('This submission does not have public-sharing consent.')
-            if not item.privacy_review_complete: reasons.append('Complete the privacy review before publishing.')
             if item.safety_flag: reasons.append('This item is safety-flagged and cannot be published.')
             if item.kind not in ('text','audio','video'): reasons.append('This submission format cannot be published.')
             if item.kind=='text' and not item.message.strip(): reasons.append('Add valid text content before publishing.')
@@ -95,18 +94,20 @@ class ListeningRequestAdmin(admin.ModelAdmin):
         controls=[format_html('<a class="row-action" href="{}">Review</a>',review),format_html('<a class="row-action" href="{}">Preview</a>',preview)]
         if obj.publication_status=='published':
             controls.append(format_html('<a class="row-action danger" href="{}">Unpublish</a>',reverse('admin:indiaApp_listeningrequest_unpublish',args=[obj.pk])))
-        elif obj.public_sharing_consent and obj.privacy_review_complete and not obj.safety_flag:
+        elif self._eligible(obj):
             controls.append(format_html('<a class="row-action publish" href="{}">Publish</a>',reverse('admin:indiaApp_listeningrequest_publish',args=[obj.pk])))
         return format_html('<div class="row-actions">{}</div>',format_html(''.join(str(x) for x in controls)))
 
     def _eligible(self,item):
         valid_content=bool(item.message.strip()) if item.kind=='text' else bool(item.media)
-        return item.kind in ('text','audio','video') and item.public_sharing_consent and item.privacy_review_complete and not item.safety_flag and valid_content
+        return item.kind in ('text','audio','video') and item.public_sharing_consent and not item.safety_flag and valid_content
 
     def _publish(self,request,item):
         if not self.has_change_permission(request,item) or not self._eligible(item): return False,'Consent, safety or content requirements are not complete.'
         previous=item.publication_status
         with transaction.atomic():
+            # The confirmed Approve & Publish action is the staff privacy-review decision.
+            item.privacy_review_complete=True
             story=item.published_story or Story()
             excerpt=' '.join(item.message.split())[:72]
             story.title=item.title or story.title or excerpt or f'Anonymous {item.get_kind_display()} message'

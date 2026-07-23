@@ -11,5 +11,5 @@
   {% else %}<p class="errornote">No valid public content is attached.</p>{% endif %}
   <footer><span>{{ item.comment_preference|capfirst }}</span><span>{{ item.anonymous|yesno:"Anonymous student,Student" }}</span></footer>
 </article>
-<div class="preview-actions"><a class="button" href="{% url 'admin:indiaApp_listeningrequest_change' item.pk %}">Return to review</a>{% if item.publication_status == 'published' %}<a class="button danger" href="{% url 'admin:indiaApp_listeningrequest_unpublish' item.pk %}">Unpublish</a>{% elif item.public_sharing_consent and item.privacy_review_complete and not item.safety_flag %}<a class="button default" href="{% url 'admin:indiaApp_listeningrequest_publish' item.pk %}">Approve &amp; publish</a>{% endif %}</div>
+<div class="preview-actions"><a class="button" href="{% url 'admin:indiaApp_listeningrequest_change' item.pk %}">Return to review</a>{% if item.publication_status == 'published' %}<a class="button danger" href="{% url 'admin:indiaApp_listeningrequest_unpublish' item.pk %}">Unpublish</a>{% elif item.public_sharing_consent and not item.safety_flag %}<a class="button default" href="{% url 'admin:indiaApp_listeningrequest_publish' item.pk %}">Approve &amp; publish</a>{% endif %}</div>
 {% endblock %}

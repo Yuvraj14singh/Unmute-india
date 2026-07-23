@@ -326,17 +326,27 @@ class AdminPublicationWorkspaceTests(TestCase):
         item.refresh_from_db()
         self.assertIsNone(item.published_story_id)
 
-    def test_cannot_publish_without_privacy_review_or_when_safety_flagged(self):
+    def test_explicit_approval_completes_privacy_review_but_safety_flag_blocks(self):
         incomplete=self.request(privacy_review_complete=False)
         flagged=self.request(safety_flag=True)
-        for item in (incomplete,flagged):
-            response=self.client.post(reverse('admin:indiaApp_listeningrequest_publish',args=[item.pk]),follow=True)
-            self.assertEqual(response.status_code,200)
-            item.refresh_from_db()
-            self.assertIsNone(item.published_story_id)
-        detail=self.client.get(reverse('admin:indiaApp_listeningrequest_change',args=[incomplete.pk]))
-        self.assertContains(detail,'Complete the privacy review before publishing.')
+        response=self.client.post(reverse('admin:indiaApp_listeningrequest_publish',args=[incomplete.pk]),follow=True)
+        self.assertEqual(response.status_code,200)
+        incomplete.refresh_from_db()
+        self.assertTrue(incomplete.privacy_review_complete)
+        self.assertIsNotNone(incomplete.published_story_id)
+        response=self.client.post(reverse('admin:indiaApp_listeningrequest_publish',args=[flagged.pk]),follow=True)
+        self.assertEqual(response.status_code,200)
+        flagged.refresh_from_db()
+        self.assertIsNone(flagged.published_story_id)
+        detail=self.client.get(reverse('admin:indiaApp_listeningrequest_change',args=[flagged.pk]))
+        self.assertContains(detail,'safety-flagged and cannot be published')
         self.assertContains(detail,'Approve &amp; Publish')
+
+    def test_publish_button_is_active_before_privacy_checkbox_is_saved(self):
+        item=self.request(privacy_review_complete=False)
+        response=self.client.get(reverse('admin:indiaApp_listeningrequest_change',args=[item.pk]))
+        self.assertContains(response,'publish-primary')
+        self.assertContains(response,'Will complete on approval')
 
     def test_detail_page_has_all_public_sharing_actions_and_readable_state(self):
         item=self.request()
