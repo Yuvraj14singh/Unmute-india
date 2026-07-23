@@ -1,7 +1,6 @@
 /* Unmute India staff workspace — intentionally high contrast and calm. */
 :root,
-html[data-theme="light"],
-html[data-theme="dark"] {
+html[data-theme="light"] {
   color-scheme: light;
   --primary: #08783f;
   --secondary: #07513a;
@@ -186,6 +185,38 @@ html[data-theme="dark"] #nav-sidebar .module tr:nth-child(even) th,html[data-the
 html[data-theme="dark"] #changelist-filter{background:#0d2729;border-color:#29423d;color:#eef3e9}
 html[data-theme="dark"] #changelist-search #searchbar,html[data-theme="dark"] .form-row input,html[data-theme="dark"] .form-row textarea,html[data-theme="dark"] .form-row select{background:#102d2f;color:#fff;border-color:#38534e}
 html[data-theme="dark"] #content h1{color:#f4efe2}
+html[data-theme="dark"] #nav-sidebar .module a{color:#b9efcd}
+html[data-theme="dark"] #nav-sidebar .current-model th,
+html[data-theme="dark"] #nav-sidebar .current-model td{background:#16453a!important}
+html[data-theme="dark"] #nav-sidebar .current-model a{color:#fff}
+html[data-theme="dark"] #nav-filter{background:#102d2f;color:#fff;border-color:#38534e}
+html[data-theme="dark"] .toggle-nav-sidebar{background:#0d2729;color:#9ee0b8;border-color:#29423d}
+html[data-theme="dark"] .form-row label,
+html[data-theme="dark"] #changelist-filter h3,
+html[data-theme="dark"] #changelist-filter li,
+html[data-theme="dark"] #changelist-filter a{color:#e8f2eb}
+html[data-theme="dark"] #changelist-filter li.selected a{color:#78dda2;font-weight:800}
+html[data-theme="dark"] .form-row .help,
+html[data-theme="dark"] .form-row p.help,
+html[data-theme="dark"] .help{color:#b6c9bd!important}
+
+/* Django's native control stays functional, but looks like a deliberate mode switch. */
+.theme-toggle{
+  width:40px!important;height:40px!important;min-width:40px;
+  display:inline-grid!important;place-items:center;
+  padding:0!important;margin:0 2px!important;
+  border:1px solid #ffffff45!important;border-radius:999px!important;
+  background:#ffffff12!important;color:#fff!important;
+  box-shadow:inset 0 1px #ffffff18,0 8px 18px #0002;
+}
+.theme-toggle:hover,.theme-toggle:focus{background:#ffffff22!important;border-color:#ffffff80!important;outline:3px solid #ffffff18}
+.theme-toggle svg{width:19px!important;height:19px!important;color:#fff!important}
+.theme-toggle .visually-hidden{position:absolute!important}
+
+.public-review-choice{
+  margin-top:8px!important;padding:12px!important;border:1px solid #13880835!important;
+  border-radius:12px;background:#1388080b;
+}
 
 @media(max-width:1100px){
   #changelist{grid-template-columns:1fr}

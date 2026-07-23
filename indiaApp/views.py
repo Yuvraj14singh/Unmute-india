@@ -306,14 +306,17 @@ def share(request, kind='text'):
         if form.is_valid():
             item = form.save(commit=False); item.kind = kind
             item.user = request.user if request.user.is_authenticated else None
-            item.consent_at = timezone.now(); item.save()
+            item.consent_at = timezone.now()
+            item.publication_status = 'review' if item.public_sharing_consent else 'private'
+            item.save()
             request.session['last_submission'] = str(item.public_id)
+            request.session['last_submission_public_review'] = item.public_sharing_consent
             return redirect('received')
         messages.error(request, 'Your message could not be sent yet, but what you wrote is still safe. You can try again.')
     else: form = ListeningRequestForm(initial={'anonymous':True,'wants_reply':True})
     return render(request, f'listening/{kind}_share.html', {'form':form, 'kind':kind})
 
-def received(request): return render(request, 'listening/received.html', {'reference':request.session.get('last_submission')})
+def received(request): return render(request, 'listening/received.html', {'reference':request.session.get('last_submission'), 'public_review_requested':request.session.get('last_submission_public_review', False)})
 
 def safety(request):
     return render(request, 'support/safety.html', {'resources':SupportResource.objects.filter(verified=True)})

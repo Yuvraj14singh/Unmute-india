@@ -36,6 +36,7 @@ class ListeningRequest(TimeStampedModel):
     TYPES = [('text','Text'),('audio','Audio'),('video','Video')]
     NEEDS = [('listen','Just listen'),('reply','Send a supportive reply'),('think','Help me think through this'),('trusted','Help me talk to someone I trust'),('unsure','I am not sure')]
     STATUS = [('new','New'),('assigned','Assigned'),('active','Active'),('closed','Closed')]
+    PUBLICATION_STATUS = [('private','Private — not submitted for publication'),('review','Public sharing review requested'),('published','Approved and published'),('rejected','Public sharing declined')]
     public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     kind = models.CharField(max_length=10, choices=TYPES, default='text')
@@ -49,6 +50,11 @@ class ListeningRequest(TimeStampedModel):
     assigned_to = models.ForeignKey(ListenerProfile, null=True, blank=True, on_delete=models.SET_NULL)
     safety_flag = models.BooleanField(default=False, db_index=True)
     consent_at = models.DateTimeField(null=True, blank=True)
+    public_sharing_consent = models.BooleanField(default=False, db_index=True, help_text='The student explicitly allowed this submission to be reviewed for anonymous public sharing.')
+    publication_status = models.CharField(max_length=12, choices=PUBLICATION_STATUS, default='private', db_index=True)
+    published_story = models.OneToOneField('Story', null=True, blank=True, related_name='source_listening_request', on_delete=models.SET_NULL)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name='reviewed_listening_requests', on_delete=models.SET_NULL)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
 
 class ConversationMessage(TimeStampedModel):
     request = models.ForeignKey(ListeningRequest, related_name='replies', on_delete=models.CASCADE)

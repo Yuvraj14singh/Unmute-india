@@ -1,5 +1,34 @@
-{% extends 'base.html' %}{% load static %}
+{% extends 'base.html' %}
+{% load static %}
 {% block title %}Write What You Feel | Unmute India{% endblock %}
 {% block css %}<link rel="stylesheet" href="{% static 'css/listening/share.css' %}">{% endblock %}
-{% block content %}<section class="share-studio text-studio"><div class="studio-intro"><a class="back-link" href="{% url 'talk' %}">← Back to sharing options</a><p class="eyebrow green">PRIVATE WRITING SPACE</p><h1>Your words can arrive <em>exactly as they are.</em></h1><p class="studio-lead">No polished explanation is needed. Begin with one honest sentence, pause whenever you want, and return to your draft later.</p><div class="studio-promises"><span>◇ Draft saved on this device</span><span>◇ Anonymous by default</span><span>◇ Read by an authorised member</span></div></div><div class="studio-panel typing-pad"><div class="panel-top"><span>PRIVATE NOTE</span><span class="live-dot">● Ready when you are</span></div><form method="post" data-draft-form>{% csrf_token %}{{ form.non_field_errors }}<label for="id_message">What would you like us to hear?</label>{{ form.message }}<div class="pad-footer"><small>Your draft stays in this browser until you submit or clear it.</small><button type="button" class="quiet-action" data-clear-draft>Clear draft</button></div><fieldset><legend>What would help most? <small>Optional</small></legend>{{ form.support_preference }}</fieldset><div class="choice-checks"><label class="check">{{ form.anonymous }} <span>Keep me anonymous</span></label><label class="check">{{ form.wants_reply }} <span>I would like a written member reply</span></label><label class="check">{{ form.consent }} <span>{{ form.consent.label }}</span></label></div><p class="privacy-note">🔒 Private by default — only authorised Unmute India members can access this.</p><button class="pill submit-share" type="submit">Share privately <span>→</span></button></form></div></section><section class="share-assurance"><div><b>01</b><h3>You stay in control</h3><p>No public posting without separate, clear permission.</p></div><div><b>02</b><h3>A real person reads</h3><p>Your note enters a protected staff queue—not a public feed.</p></div><div><b>03</b><h3>No unexpected call</h3><p>If requested, a thoughtful written reply stays inside the platform.</p></div></section>{% endblock %}
+{% block content %}
+<section class="share-studio text-studio">
+  <div class="studio-intro">
+    <a class="back-link" href="{% url 'talk' %}">← Back to sharing options</a>
+    <p class="eyebrow green">PRIVATE WRITING SPACE</p>
+    <h1>Your words can arrive <em>exactly as they are.</em></h1>
+    <p class="studio-lead">No polished explanation is needed. Begin with one honest sentence, pause whenever you want, and return to your draft later.</p>
+    <div class="studio-promises"><span>◇ Draft saved on this device</span><span>◇ Anonymous by default</span><span>◇ Read by an authorised member</span></div>
+  </div>
+  <div class="studio-panel typing-pad">
+    <div class="panel-top"><span>PRIVATE NOTE</span><span class="live-dot">● Ready when you are</span></div>
+    <form method="post" data-draft-form>
+      {% csrf_token %}{{ form.non_field_errors }}
+      <label for="id_message">What would you like us to hear?</label>{{ form.message }}
+      <div class="pad-footer"><small>Your draft stays in this browser until you submit or clear it.</small><button type="button" class="quiet-action" data-clear-draft>Clear draft</button></div>
+      <fieldset><legend>What would help most? <small>Optional</small></legend>{{ form.support_preference }}</fieldset>
+      <div class="choice-checks">
+        <label class="check">{{ form.anonymous }} <span>Keep me anonymous</span></label>
+        <label class="check">{{ form.wants_reply }} <span>I would like a written member reply</span></label>
+        <label class="check">{{ form.consent }} <span>{{ form.consent.label }}</span></label>
+        <label class="check public-review-choice">{{ form.public_sharing_consent }} <span>{{ form.public_sharing_consent.label }}</span></label>
+      </div>
+      <p class="privacy-note">🔒 Private by default — only authorised Unmute India members can access this.</p>
+      <button class="pill submit-share" type="submit">Share privately <span>→</span></button>
+    </form>
+  </div>
+</section>
+<section class="share-assurance"><div><b>01</b><h3>You stay in control</h3><p>No public posting without separate, clear permission.</p></div><div><b>02</b><h3>A real person reads</h3><p>Your note enters a protected staff queue—not a public feed.</p></div><div><b>03</b><h3>No unexpected call</h3><p>If requested, a thoughtful written reply stays inside the platform.</p></div></section>
+{% endblock %}
 {% block js %}<script src="{% static 'js/listening/text_share.js' %}" defer></script>{% endblock %}

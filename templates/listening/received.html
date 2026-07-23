@@ -1,1 +1,11 @@
-{% extends 'base.html' %}{% block title %}We Received What You Shared{% endblock %}{% block content %}<section class="confirmation"><span>✓</span><h1>We received what you shared.</h1><p>Speaking about it was an important step. A member of our team will read, listen to or watch it carefully.</p>{% if reference %}<small>Private reference: {{ reference }}</small>{% endif %}<p>You can leave now and return whenever you feel ready.</p><a class="pill" href="{% url 'home' %}">Return home</a></section>{% endblock %}
+{% extends 'base.html' %}
+{% block title %}We Received What You Shared{% endblock %}
+{% block content %}
+<section class="confirmation">
+  <span>✓</span><h1>We received what you shared.</h1>
+  <p>Speaking about it was an important step. A member of our team will read, listen to or watch it carefully.</p>
+  {% if public_review_requested %}<p>Your optional public-sharing request is awaiting moderation and a privacy review. It is not public yet.</p>{% else %}<p>This submission remains private and will not appear in Our Stories.</p>{% endif %}
+  {% if reference %}<small>Private reference: {{ reference }}</small>{% endif %}
+  <p>You can leave now and return whenever you feel ready.</p><a class="pill" href="{% url 'home' %}">Return home</a>
+</section>
+{% endblock %}

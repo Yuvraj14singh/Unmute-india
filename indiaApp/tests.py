@@ -20,6 +20,37 @@ class PublicPageTests(TestCase):
         item = ListeningRequest.objects.get()
         self.assertEqual(item.privacy, 'private')
         self.assertTrue(item.anonymous)
+        self.assertFalse(item.public_sharing_consent)
+        self.assertEqual(item.publication_status, 'private')
+
+    def test_staff_can_publish_only_an_explicitly_consented_submission(self):
+        staff = get_user_model().objects.create_superuser('moderator', 'moderator@example.com', 'safe-test-password')
+        consented = ListeningRequest.objects.create(
+            kind='text',
+            message='A student story approved for the public feed.',
+            public_sharing_consent=True,
+            publication_status='review',
+        )
+        private = ListeningRequest.objects.create(
+            kind='text',
+            message='This must stay private.',
+            public_sharing_consent=False,
+            publication_status='private',
+        )
+        self.client.force_login(staff)
+        response = self.client.post(reverse('admin:indiaApp_listeningrequest_changelist'), {
+            'action':'approve_and_publish',
+            '_selected_action':[consented.pk, private.pk],
+        }, follow=True)
+        self.assertEqual(response.status_code, 200)
+        consented.refresh_from_db(); private.refresh_from_db()
+        self.assertEqual(consented.publication_status, 'published')
+        self.assertIsNotNone(consented.published_story_id)
+        self.assertTrue(consented.published_story.is_public)
+        self.assertEqual(private.publication_status, 'private')
+        self.assertIsNone(private.published_story_id)
+        self.assertContains(self.client.get(reverse('stories')), 'A student story approved for the public feed.')
+        self.assertNotContains(self.client.get(reverse('stories')), 'This must stay private.')
 
     def test_private_story_not_in_feed(self):
         Story.objects.create(body='Private draft',slug='private',approved=False)

@@ -1,16 +1,78 @@
 from django.contrib import admin
+from django.contrib import messages
+from django.core.files.base import ContentFile
+from django.db import transaction
+from django.utils import timezone
+from django.utils.text import slugify
 from .models import *
 
 @admin.register(ListeningRequest)
 class ListeningRequestAdmin(admin.ModelAdmin):
-    list_display=('public_id','kind','status','anonymous','safety_flag','assigned_to','created_at')
-    list_filter=('kind','status','anonymous','safety_flag')
+    list_display=('public_id','kind','status','publication_status','public_sharing_consent','published_story','safety_flag','assigned_to','created_at')
+    list_filter=('kind','status','publication_status','public_sharing_consent','anonymous','safety_flag')
     search_fields=('public_id','message')
-    readonly_fields=('public_id','privacy','created_at','updated_at')
+    readonly_fields=('public_id','privacy','public_sharing_consent','publication_status','published_story','reviewed_by','reviewed_at','consent_at','created_at','updated_at')
     list_editable=('status','assigned_to')
     date_hierarchy='created_at'
     ordering=('-safety_flag','-created_at')
     list_per_page=30
+    actions=('approve_and_publish','decline_publication')
+    fieldsets=(
+        ('Private submission', {'fields':('public_id','kind','message','media','anonymous','wants_reply','support_preference','privacy','status','assigned_to','safety_flag')}),
+        ('Public sharing decision', {'fields':('public_sharing_consent','publication_status','published_story','reviewed_by','reviewed_at'), 'description':'Only submissions with explicit public-sharing consent may be published. Review and remove personal details before approval.'}),
+        ('Record', {'fields':('consent_at','created_at','updated_at')}),
+    )
+
+    @admin.action(description='Approve & publish selected consented submissions')
+    def approve_and_publish(self, request, queryset):
+        published = skipped = failed = 0
+        for item in queryset.select_related('published_story'):
+            if not item.public_sharing_consent or item.publication_status != 'review':
+                skipped += 1
+                continue
+            try:
+                with transaction.atomic():
+                    story = item.published_story or Story()
+                    excerpt = ' '.join(item.message.split())[:72]
+                    story.title = story.title or (excerpt if excerpt else f'Anonymous {item.get_kind_display()} story')
+                    story.slug = story.slug or f"{slugify(story.title)[:48]}-{item.public_id.hex[:8]}"
+                    story.body = item.message.strip() or f'An anonymous student shared this {item.get_kind_display().lower()} story.'
+                    story.display_name = 'Anonymous Student'
+                    story.story_format = {'audio':'voice','video':'video'}.get(item.kind, 'text')
+                    story.topic = story.topic or 'heard'
+                    story.approved = True
+                    story.moderation_status = 'published'
+                    story.public_consent = True
+                    story.privacy_review_complete = True
+                    story.published_at = story.published_at or timezone.now()
+                    story.save()
+                    if item.media and not story.public_media:
+                        item.media.open('rb')
+                        story.public_media.save(item.media.name.rsplit('/', 1)[-1], ContentFile(item.media.read()), save=True)
+                        item.media.close()
+                    item.publication_status = 'published'
+                    item.published_story = story
+                    item.reviewed_by = request.user
+                    item.reviewed_at = timezone.now()
+                    item.save(update_fields=('publication_status','published_story','reviewed_by','reviewed_at','updated_at'))
+                    AuditLog.objects.create(actor=request.user, action='Approved private submission for public story', object_reference=f'ListeningRequest:{item.pk}:Story:{story.pk}')
+                    published += 1
+            except Exception:
+                failed += 1
+        if published:
+            self.message_user(request, f'{published} submission(s) approved and published in Our Stories.', messages.SUCCESS)
+        if skipped:
+            self.message_user(request, f'{skipped} submission(s) skipped because public consent was absent, already decided, or not awaiting review.', messages.WARNING)
+        if failed:
+            self.message_user(request, f'{failed} submission(s) could not be published. Check media storage and server logs.', messages.ERROR)
+
+    @admin.action(description='Decline public publication for selected submissions')
+    def decline_publication(self, request, queryset):
+        eligible = queryset.filter(publication_status='review', published_story__isnull=True)
+        count = eligible.update(publication_status='rejected', reviewed_by=request.user, reviewed_at=timezone.now())
+        if count:
+            AuditLog.objects.create(actor=request.user, action=f'Declined {count} public sharing request(s)', object_reference='ListeningRequest bulk action')
+        self.message_user(request, f'{count} public sharing request(s) declined; their private support records remain protected.', messages.SUCCESS)
 
 @admin.register(Petition)
 class PetitionAdmin(admin.ModelAdmin):

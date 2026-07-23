@@ -3,9 +3,10 @@ from .models import ListeningRequest, PetitionSignature, PublicQuestion, Volunte
 
 class ListeningRequestForm(forms.ModelForm):
     consent = forms.BooleanField(required=True, label='I understand this is private support, not an emergency service.')
+    public_sharing_consent = forms.BooleanField(required=False, label='You may review this for anonymous public sharing. Nothing is published until staff approval and a privacy review.')
     class Meta:
         model = ListeningRequest
-        fields = ['message','media','anonymous','wants_reply','support_preference']
+        fields = ['message','media','anonymous','wants_reply','support_preference','public_sharing_consent']
         widgets = {'message': forms.Textarea(attrs={'placeholder':'Write whatever is on your mind…','rows':9}), 'support_preference': forms.RadioSelect}
     def clean_media(self):
         file = self.cleaned_data.get('media')

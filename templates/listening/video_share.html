@@ -1,5 +1,28 @@
-{% extends 'base.html' %}{% load static %}
+{% extends 'base.html' %}
+{% load static %}
 {% block title %}Share Through Video | Unmute India{% endblock %}
 {% block css %}<link rel="stylesheet" href="{% static 'css/listening/share.css' %}">{% endblock %}
-{% block content %}<section class="share-studio media-studio"><div class="studio-intro"><a class="back-link" href="{% url 'talk' %}">← Back to sharing options</a><p class="eyebrow green">PRIVATE VIDEO STUDIO</p><h1>Your face is <em>never required.</em></h1><p class="studio-lead">Point the camera away, keep it covered, or upload an audio-led video. Your camera never starts automatically.</p><div class="studio-promises"><span>◇ Preview before recording</span><span>◇ Camera only with permission</span><span>◇ Anonymous sharing available</span></div></div><div class="studio-panel"><div class="panel-top"><span>VIDEO MESSAGE</span><span class="live-dot">● Camera off</span></div><div class="video-rec"><video id="camera" controls hidden></video><div class="camera-placeholder"><span>▶</span><b>Your private preview appears here</b><small>Nothing is recording yet</small></div><div class="camera-actions"><button class="pill" id="cameraBtn" type="button">Allow camera & preview</button><button class="pill saffron" id="videoRecord" type="button" hidden>Start recording</button></div><strong id="state">Camera is off</strong></div><form method="post" enctype="multipart/form-data">{% csrf_token %}<label class="upload-zone" for="id_media"><span>↑</span><b>Upload an existing video</b><small>WEBM, MP4 or MOV · up to 25 MB</small>{{ form.media }}</label><div hidden>{{ form.message }}</div><div class="choice-checks"><label class="check">{{ form.anonymous }} <span>Keep me anonymous</span></label><label class="check">{{ form.wants_reply }} <span>Ask for a written reply</span></label><label class="check">{{ form.consent }} <span>{{ form.consent.label }}</span></label></div><p class="warning">Privacy check: remove visible addresses, documents, uniforms or other identifying details.</p><button class="pill submit-share" type="submit">Send video privately <span>→</span></button></form></div></section><section class="share-assurance"><div><b>01</b><h3>Preview first</h3><p>Check framing and keep your face outside the frame if preferred.</p></div><div><b>02</b><h3>Nothing auto-sends</h3><p>You decide whether the recording is ready to submit.</p></div><div><b>03</b><h3>Private review</h3><p>Submitted media stays in the authorised listening queue.</p></div></section>{% endblock %}
+{% block content %}
+<section class="share-studio media-studio">
+  <div class="studio-intro"><a class="back-link" href="{% url 'talk' %}">← Back to sharing options</a><p class="eyebrow green">PRIVATE VIDEO STUDIO</p><h1>Your face is <em>never required.</em></h1><p class="studio-lead">Point the camera away, keep it covered, or upload an audio-led video. Your camera never starts automatically.</p><div class="studio-promises"><span>◇ Preview before recording</span><span>◇ Camera only with permission</span><span>◇ Anonymous sharing available</span></div></div>
+  <div class="studio-panel">
+    <div class="panel-top"><span>VIDEO MESSAGE</span><span class="live-dot">● Camera off</span></div>
+    <div class="video-rec"><video id="camera" controls hidden></video><div class="camera-placeholder"><span>▶</span><b>Your private preview appears here</b><small>Nothing is recording yet</small></div><div class="camera-actions"><button class="pill" id="cameraBtn" type="button">Allow camera & preview</button><button class="pill saffron" id="videoRecord" type="button" hidden>Start recording</button></div><strong id="state">Camera is off</strong></div>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <label class="upload-zone" for="id_media"><span>↑</span><b>Upload an existing video</b><small>WEBM, MP4 or MOV · up to 25 MB</small>{{ form.media }}</label>
+      <div hidden>{{ form.message }}</div>
+      <div class="choice-checks">
+        <label class="check">{{ form.anonymous }} <span>Keep me anonymous</span></label>
+        <label class="check">{{ form.wants_reply }} <span>Ask for a written reply</span></label>
+        <label class="check">{{ form.consent }} <span>{{ form.consent.label }}</span></label>
+        <label class="check public-review-choice">{{ form.public_sharing_consent }} <span>{{ form.public_sharing_consent.label }}</span></label>
+      </div>
+      <p class="warning">Privacy check: remove visible addresses, documents, uniforms or other identifying details.</p>
+      <button class="pill submit-share" type="submit">Send video privately <span>→</span></button>
+    </form>
+  </div>
+</section>
+<section class="share-assurance"><div><b>01</b><h3>Preview first</h3><p>Check framing and keep your face outside the frame if preferred.</p></div><div><b>02</b><h3>Nothing auto-sends</h3><p>You decide whether the recording is ready to submit.</p></div><div><b>03</b><h3>Private review</h3><p>Submitted media stays in the authorised listening queue.</p></div></section>
+{% endblock %}
 {% block js %}<script src="{% static 'js/listening/video_share.js' %}" defer></script>{% endblock %}
