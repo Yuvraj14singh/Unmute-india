@@ -279,9 +279,9 @@ class PetitionAdmin(admin.ModelAdmin):
 
 @admin.register(PetitionSignature)
 class PetitionSignatureAdmin(admin.ModelAdmin):
-    list_display=('id','masked_email','supporter_type','petition','verification_label','identity_state','moderation_status','verified_at','created_at')
+    list_display=('supporter_first_name','masked_email','supporter_type','petition','verification_label','identity_state','moderation_status','verified_at','created_at')
     list_filter=('petition','verification_method','is_verified','moderation_status','supporter_type')
-    search_fields=('id','petition__title')
+    search_fields=('name','petition__title')
     readonly_fields=('masked_email','verification_method','google_verified_at','turnstile_verified_at','verification_metadata','verification_email_sent_at','verification_email_attempts','verification_email_failures','duplicate_attempts','resend_available_at','is_verified','verified','verified_at','private_identity','created_at','updated_at')
     exclude=('email','normalized_email','verified_email','google_subject','verification_token','token_created_at','ip_hash','user_agent_hash')
     actions=('mark_valid','flag_for_review','mark_spam','reject_signatures','remove_signatures','restore_signatures','export_verified')
@@ -294,6 +294,9 @@ class PetitionSignatureAdmin(admin.ModelAdmin):
     def masked_email(self,obj):
         from .utils import mask_email
         return mask_email(obj.email)
+    @admin.display(description='First name', ordering='name')
+    def supporter_first_name(self,obj):
+        return obj.name.strip().split(maxsplit=1)[0] if obj.name.strip() else '—'
     @admin.display(description='Verification')
     def verification_label(self,obj):
         if obj.verification_method == 'google' and obj.is_verified: return 'Google Verified'
