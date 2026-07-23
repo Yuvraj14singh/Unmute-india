@@ -33,9 +33,23 @@ class ListeningRequestForm(forms.ModelForm):
         return cleaned
 
 class VolunteerForm(forms.ModelForm):
+    commitment = forms.BooleanField(
+        required=True,
+        label='I understand that this is a peer-support role, not counselling, and that applications are reviewed before any access is given.',
+    )
     class Meta:
         model = VolunteerApplication
         fields = ['name','email','motivation']
+        labels = {
+            'name': 'Your name',
+            'email': 'Email address',
+            'motivation': 'Why would you like to volunteer?',
+        }
+        widgets = {
+            'name': forms.TextInput(attrs={'placeholder':'Your name','autocomplete':'name'}),
+            'email': forms.EmailInput(attrs={'placeholder':'you@example.com','autocomplete':'email'}),
+            'motivation': forms.Textarea(attrs={'placeholder':'Tell us what draws you to this work and how you would listen responsibly…','rows':6}),
+        }
 
 class PublicQuestionForm(forms.ModelForm):
     class Meta:

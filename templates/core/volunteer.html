@@ -1,1 +1,37 @@
-{% extends 'base.html' %}{% load static %}{% block title %}Join as a Listener{% endblock %}{% block css %}<link rel="stylesheet" href="{% static 'css/core/page.css' %}">{% endblock %}{% block content %}<header class="page-hero soft"><h1>Listen with care. Never with judgement.</h1><p>Listeners respect anonymity, avoid diagnosis, ask before advising and never make empty promises.</p></header><section class="message-maker">{% if sent %}<h2>Thank you for offering your time.</h2><p>We received your application and will review it carefully.</p>{% else %}<form method="post">{% csrf_token %}{{ form.as_p }}<button class="pill">Apply to volunteer</button></form>{% endif %}</section>{% endblock %}{% block js %}<script src="{% static 'js/core/page.js' %}" defer></script>{% endblock %}
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Volunteer with Unmute India | Listen Responsibly{% endblock %}
+{% block css %}<link rel="stylesheet" href="{% static 'css/core/volunteer.css' %}">{% endblock %}
+{% block content %}
+<header class="volunteer-hero">
+  <div>
+    <p class="volunteer-kicker">VOLUNTEER WITH UNMUTE INDIA</p>
+    <h1>Make room for a student to be <em>heard.</em></h1>
+    <p>Volunteers help with careful peer listening, community moderation and responsible student advocacy. This is not a counselling role, and applying does not provide immediate access to private messages.</p>
+    <a href="#application">See how to apply ↓</a>
+  </div>
+  <figure><img src="{% static 'images/about/about-community.png' %}" alt="Indian students listening carefully to one another in a campus circle"><figcaption>Listen first. Respect privacy. Know your limits.</figcaption></figure>
+</header>
+
+<section class="volunteer-purpose">
+  <div><p class="volunteer-kicker volunteer-kicker--green">WHAT VOLUNTEERS MAY HELP WITH</p><h2>Different skills.<br>One careful <em>standard.</em></h2></div>
+  <div class="volunteer-roles"><article><span>01</span><h3>Peer listening</h3><p>Respond with empathy, avoid diagnosis and ask before offering advice.</p></article><article><span>02</span><h3>Community moderation</h3><p>Help keep public stories and responses supportive, private and respectful.</p></article><article><span>03</span><h3>Research & accountability</h3><p>Organise sources, timelines and student concerns without overstating claims.</p></article><article><span>04</span><h3>Platform support</h3><p>Contribute writing, design, outreach or operational skills to the mission.</p></article></div>
+</section>
+
+<section class="volunteer-standards">
+  <div><p class="volunteer-kicker">BEFORE YOU APPLY</p><h2>Care requires boundaries.</h2><p>You do not need to have all the answers. You do need patience, discretion and the willingness to follow a reviewed process.</p></div>
+  <ul><li><b>Protect privacy</b><span>Never copy, share or discuss private student content outside authorised workflows.</span></li><li><b>Stay within the role</b><span>Do not present yourself as a counsellor, doctor or legal professional unless separately verified.</span></li><li><b>Listen without judgement</b><span>Respect identity, language, pauses and the student's right not to continue.</span></li><li><b>Accept review and training</b><span>Applications are screened; access is role-based and never automatic.</span></li></ul>
+</section>
+
+<section class="volunteer-application" id="application">
+  <div class="volunteer-application__intro"><p class="volunteer-kicker volunteer-kicker--green">APPLICATION</p>{% if sent %}<h2>Thank you for stepping forward.</h2><p>Your application has been received. The Unmute India team will review it before contacting you about a suitable role or next step.</p><a class="volunteer-button" href="{% url 'home' %}">Return Home</a>{% else %}<h2>Tell us how you would like to help.</h2><p>Keep it honest and brief. Applying is only the first step—there is no automatic approval or access to private student content.</p><div class="application-flow"><span><b>1</b>Apply</span><span><b>2</b>Review</span><span><b>3</b>Conversation</span><span><b>4</b>Role access</span></div>{% endif %}</div>
+  {% if not sent %}<form method="post" novalidate>{% csrf_token %}
+    {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="field-row"><div class="field"><label for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>{{ form.name }}{{ form.name.errors }}</div><div class="field"><label for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>{{ form.email }}{{ form.email.errors }}</div></div>
+    <div class="field"><label for="{{ form.motivation.id_for_label }}">{{ form.motivation.label }}</label><small>A few thoughtful sentences are enough.</small>{{ form.motivation }}{{ form.motivation.errors }}</div>
+    <label class="commitment" for="{{ form.commitment.id_for_label }}">{{ form.commitment }}<span>{{ form.commitment.label }}</span></label>{{ form.commitment.errors }}
+    <button class="volunteer-button" type="submit">Send My Application →</button>
+    <p class="form-note">Your details are used only to review and respond to this volunteer application.</p>
+  </form>{% endif %}
+</section>
+{% endblock %}
