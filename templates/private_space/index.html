@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}My Space | Unmute India{% endblock %}
+{% block css %}<link rel="stylesheet" href="{% static 'css/private_space.css' %}">{% endblock %}
+{% block content %}
+<section class="private-space">
+  <header class="space-head">
+    <p class="eyebrow green">PRIVATE &amp; UNLISTED</p>
+    <h1>My Space</h1>
+    <p>Your submissions and support, privately remembered across devices.</p>
+    {% if identity %}
+      <form method="post" action="{% url 'my_space_sign_out' %}">{% csrf_token %}<button class="space-link" type="submit">Sign out of My Space</button></form>
+    {% endif %}
+  </header>
+  {% if not identity %}
+    <article class="restore-card">
+      <h2>Restore your private activity</h2>
+      <p>Continue with Google to restore your private activity. Your petition support will not be submitted again.</p>
+      <label><input type="checkbox" data-sync-consent> Use this Google account to privately remember your submissions and support across devices.</label>
+      <div id="my-space-google"></div>
+      <p class="space-status" data-space-status role="status"></p>
+      <small>Google is used to privately restore your activity across devices. Your email is never shown publicly. On a new device, you may need to confirm the same Google account again.</small>
+    </article>
+    {% if guest_submissions %}<section class="browser-activity"><h2>Saved on this browser</h2><div class="space-grid">{% for item in guest_submissions %}<article class="space-card"><span>{{ item.get_kind_display }}</span><h3>{{ item.title|default:item.message|truncatewords:18|default:"Private submission" }}</h3><time>{{ item.created_at|date:"d M Y" }}</time><p>{{ item.get_publication_status_display }}</p></article>{% endfor %}</div></section>{% endif %}
+  {% else %}
+    <nav class="space-tabs" aria-label="My Space sections">
+      <button class="active" data-space-tab="submissions">Submissions</button>
+      <button data-space-tab="reactions">Reactions</button>
+      <button data-space-tab="responses">Supported Responses</button>
+    </nav>
+    <section data-space-panel="submissions">
+      <h2>My Submissions</h2>
+      <div class="space-grid">
+      {% for item in submissions %}
+        <article class="space-card">
+          <span>{{ item.get_kind_display }}</span>
+          <h3>{{ item.title|default:item.message|truncatewords:18|default:"Private submission" }}</h3>
+          <time>{{ item.created_at|date:"d M Y" }}</time>
+          <dl><div><dt>Moderation</dt><dd>{{ item.get_status_display }}</dd></div><div><dt>Public visibility</dt><dd>{{ item.get_publication_status_display }}</dd></div>{% if item.published_story.published_at %}<div><dt>Published</dt><dd>{{ item.published_story.published_at|date:"d M Y" }}</dd></div>{% endif %}</dl>
+        </article>
+      {% empty %}<p>No privately linked submissions yet.</p>{% endfor %}
+      </div>
+    </section>
+    <section data-space-panel="reactions" hidden>
+      <h2>My Reactions</h2>
+      <div class="space-grid">{% for item in reactions %}<article class="space-card"><span>I hear you</span><h3>{{ item.story.title|default:"Anonymous story" }}</h3><a href="{{ item.story.get_absolute_url|default:'#' }}">Open public story</a></article>{% empty %}<p>No reactions yet.</p>{% endfor %}</div>
+    </section>
+    <section data-space-panel="responses" hidden>
+      <h2>Supported Responses</h2>
+      <div class="space-grid">{% for item in supported_responses %}<article class="space-card"><span>Supported response</span><p>{{ item.comment.body|truncatewords:30 }}</p><small>Public content remains anonymous and is not linked into a public profile.</small></article>{% empty %}<p>No supported responses yet.</p>{% endfor %}</div>
+    </section>
+    <p class="space-privacy">Your public submissions are not linked together as belonging to the same person.</p>
+  {% endif %}
+</section>
+{% endblock %}
+{% block js %}
+{% if not identity and google_client_id %}
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>window.unmuteMySpace={clientId:"{{ google_client_id|escapejs }}",url:"{% url 'my_space_google_sync' %}"};</script>
+<script src="{% static 'js/private_space.js' %}" defer></script>
+{% else %}<script src="{% static 'js/private_space.js' %}" defer></script>{% endif %}
+{% endblock %}

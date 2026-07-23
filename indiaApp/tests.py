@@ -6,9 +6,12 @@ from django.urls import reverse
 from django.utils import timezone
 from unittest.mock import patch
 from pathlib import Path
+from io import StringIO
 import tempfile
+from django.core.management import call_command
 from .forms import GooglePetitionSupportForm
-from .models import AuditLog, CommentReaction, CommentReport, ListeningRequest, Petition, PetitionSignature, PublicQuestion, Story, StoryComment, StoryReaction
+from .models import AuditLog, CommentReaction, CommentReport, ListeningRequest, Petition, PetitionSignature, PrivateIdentity, PublicQuestion, Story, StoryComment, StoryReaction
+from .private_identity import google_subject_hash, merge_guest_activity, provision_signature_identity, resolve_google_identity
 from .utils import compact_count
 
 class PublicPageTests(TestCase):
@@ -306,6 +309,143 @@ class DedicatedStoryPageTests(TestCase):
         story=self.public_story('comments-closed'); story.comment_mode='none'; story.save()
         response=self.client.post(reverse('story_comment',args=[story.pk]),{'body':'I am listening.'})
         self.assertEqual(response.status_code,403)
+
+@override_settings(PRIVATE_IDENTITY_HMAC_KEY='identity-test-secret',GOOGLE_CLIENT_ID='client')
+class PrivateIdentitySystemTests(TestCase):
+    def setUp(self):
+        self.petition=Petition.objects.create(
+            title='Private identity petition',slug='private-identity-petition',
+            short_heading='Support safely',summary='Summary',primary_demand='Demand',
+            petition_status='published',
+        )
+
+    def signature(self, **overrides):
+        values={
+            'petition':self.petition,'name':'Existing supporter',
+            'email':'existing@example.com','verified_email':'existing@example.com',
+            'supporter_type':'student','consent':True,'is_verified':True,
+            'verified':True,'verified_at':timezone.now(),'moderation_status':'valid',
+            'verification_method':'google','google_subject':'stable-google-sub',
+            'google_verified_at':timezone.now(),
+        }
+        values.update(overrides)
+        return PetitionSignature.objects.create(**values)
+
+    def public_story(self, slug='identity-story'):
+        return Story.objects.create(
+            slug=slug,title='Private sync story',body='Public body',
+            approved=True,moderation_status='published',public_consent=True,
+            privacy_review_complete=True,published_at=timezone.now(),
+        )
+
+    def attach(self, client, identity):
+        session=client.session
+        session['private_identity_id']=identity.pk
+        session.save()
+
+    def test_existing_signature_migration_preserves_record_and_count(self):
+        signature=self.signature()
+        before={field:getattr(signature,field) for field in (
+            'name','email','verified_email','supporter_type','consent','verified_at',
+            'petition_id','moderation_status','verification_method','google_verified_at',
+        )}
+        count_before=self.petition.verified_count
+        identity,created=provision_signature_identity(signature)
+        signature.refresh_from_db()
+        self.assertTrue(created)
+        self.assertEqual(identity.identity_status,'confirmed_google')
+        self.assertEqual(before,{field:getattr(signature,field) for field in before})
+        self.assertEqual(self.petition.verified_count,count_before)
+
+    def test_email_only_legacy_signature_is_provisional_and_idempotent(self):
+        signature=self.signature(
+            google_subject='',verification_method='email_legacy',
+            google_verified_at=None,
+        )
+        first,_=provision_signature_identity(signature)
+        signature.refresh_from_db()
+        second,created=provision_signature_identity(signature)
+        self.assertEqual(first.pk,second.pk)
+        self.assertFalse(created)
+        self.assertEqual(first.identity_status,'provisional_legacy')
+        self.assertEqual(PetitionSignature.objects.count(),1)
+
+    def test_migration_command_twice_does_not_duplicate_or_leak_email(self):
+        self.signature()
+        output=StringIO()
+        call_command('migrate_existing_petition_identities',stdout=output)
+        call_command('migrate_existing_petition_identities',stdout=output)
+        self.assertEqual(PrivateIdentity.objects.count(),1)
+        self.assertEqual(PetitionSignature.objects.count(),1)
+        self.assertNotIn('existing@example.com',output.getvalue())
+        self.assertIn('Duplicate signatures created: 0',output.getvalue())
+
+    def test_same_google_subject_resolves_same_identity_without_signature(self):
+        first=resolve_google_identity('same-sub','person@example.com',consent=True)
+        second=resolve_google_identity('same-sub','person@example.com',consent=True)
+        other=resolve_google_identity('other-sub','other@example.com',consent=True)
+        self.assertEqual(first.pk,second.pk)
+        self.assertNotEqual(first.pk,other.pk)
+        self.assertFalse(PetitionSignature.objects.exists())
+
+    @patch('indiaApp.views._verify_google_credential')
+    def test_my_space_verification_rotates_session_and_never_signs_petition(self, verify):
+        verify.return_value={'sub':'restore-sub','email':'restore@example.com','issuer':'accounts.google.com'}
+        old_key=self.client.session.session_key
+        response=self.client.post(reverse('my_space_google_sync'),{'credential':'raw-token','sync_consent':'1'})
+        self.assertEqual(response.status_code,200)
+        self.assertFalse(PetitionSignature.objects.exists())
+        self.assertNotEqual(self.client.session.session_key,old_key)
+        self.assertNotIn('raw-token',str(PrivateIdentity.objects.values().first()))
+
+    def test_cross_device_reaction_state_and_toggle(self):
+        identity=resolve_google_identity('cross-device','cross@example.com',consent=True)
+        story=self.public_story()
+        laptop=Client(); mobile=Client()
+        self.attach(laptop,identity); self.attach(mobile,identity)
+        url=reverse('react',args=[story.pk])
+        self.assertTrue(laptop.post(url,{'json':'1'}).json()['active'])
+        page=mobile.get(reverse('voices_text'))
+        self.assertContains(page,'aria-pressed="true"')
+        result=mobile.post(url,{'json':'1'}).json()
+        self.assertFalse(result['active'])
+        self.assertEqual(result['count'],0)
+
+    def test_cross_device_response_support_state_and_toggle(self):
+        identity=resolve_google_identity('response-device','response@example.com',consent=True)
+        story=self.public_story('response-sync-story')
+        comment=StoryComment.objects.create(story=story,body='Supportive response',approved=True,status='approved')
+        laptop=Client(); mobile=Client()
+        self.attach(laptop,identity); self.attach(mobile,identity)
+        url=reverse('comment_react',args=[comment.pk])
+        self.assertTrue(laptop.post(url).json()['active'])
+        payload=mobile.get(reverse('story_comments',args=[story.pk])).json()
+        self.assertTrue(payload['comments'][0]['active'])
+        result=mobile.post(url).json()
+        self.assertFalse(result['active'])
+        self.assertEqual(result['count'],0)
+
+    def test_guest_activity_merge_is_idempotent_and_avoids_duplicate(self):
+        identity=resolve_google_identity('merge-sub','merge@example.com',consent=True)
+        story=self.public_story('merge-story')
+        StoryReaction.objects.create(story=story,session_key='guest'[:40],anonymous_key='guest',reaction='with_you')
+        StoryReaction.objects.create(story=story,session_key='confirmed'[:40],private_identity=identity,reaction='with_you')
+        submission=ListeningRequest.objects.create(kind='text',message='Private guest text',guest_key='guest')
+        merge_guest_activity(identity,'guest')
+        merge_guest_activity(identity,'guest')
+        self.assertEqual(StoryReaction.objects.filter(story=story).count(),1)
+        submission.refresh_from_db()
+        self.assertEqual(submission.private_identity,identity)
+        self.assertEqual(submission.guest_key,'')
+
+    def test_my_space_isolated_between_identities(self):
+        first=resolve_google_identity('owner-one','one@example.com',consent=True)
+        second=resolve_google_identity('owner-two','two@example.com',consent=True)
+        ListeningRequest.objects.create(kind='text',message='Only owner one can see this phrase',private_identity=first)
+        owner=Client(); stranger=Client()
+        self.attach(owner,first); self.attach(stranger,second)
+        self.assertContains(owner.get(reverse('my_space')),'Only owner one')
+        self.assertNotContains(stranger.get(reverse('my_space')),'Only owner one')
 
 class UnmutedVoicesUpgradeTests(TestCase):
     def setUp(self):

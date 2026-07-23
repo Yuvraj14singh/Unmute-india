@@ -16,7 +16,8 @@ from django.views.decorators.http import require_POST
 import hashlib, json, logging, secrets
 from urllib import parse, request as urllib_request
 from .forms import GooglePetitionSupportForm, ListeningRequestForm, PetitionSignatureForm, PublicQuestionForm, VolunteerForm
-from .models import AccountabilityEvent, AuthorityResponse, AuditLog, CommentReaction, CommentReport, EvidenceDocument, ListeningRequest, Petition, PetitionSignature, PromiseTracker, PublicQuestion, Story, StoryComment, StoryReaction, StudentDemand, SupportResource
+from .models import AccountabilityEvent, AuthorityResponse, AuditLog, CommentReaction, CommentReport, EvidenceDocument, ListeningRequest, Petition, PetitionSignature, PrivateIdentity, PromiseTracker, PublicQuestion, Story, StoryComment, StoryReaction, StudentDemand, SupportResource
+from .private_identity import merge_guest_activity, provision_signature_identity, resolve_google_identity
 from .utils import mask_email, request_fingerprint
 
 logger = logging.getLogger(__name__)
@@ -75,7 +76,7 @@ def _verify_google_credential(credential):
     }
 
 def home(request):
-    return render(request, 'core/home.html', {'stories': public_stories(request.anonymous_reaction_key)[:3], 'events': AccountabilityEvent.objects.order_by('-event_date')[:3], 'featured_petition':Petition.objects.filter(petition_status='published',is_featured=True).order_by('-published_at').first()})
+    return render(request, 'core/home.html', {'stories': public_stories(request.anonymous_reaction_key, request.private_identity)[:3], 'events': AccountabilityEvent.objects.order_by('-event_date')[:3], 'featured_petition':Petition.objects.filter(petition_status='published',is_featured=True).order_by('-published_at').first()})
 
 def simple_page(request, page):
     allowed = {'about','privacy','terms','guidelines','contact','support','help-me-say-it','accountability','evidence','petition'}
@@ -238,6 +239,7 @@ def google_petition_support(request, slug):
             if not duplicate:
                 duplicate = PetitionSignature.objects.select_for_update().filter(petition=petition, normalized_email=email, is_verified=True).first()
             if duplicate:
+                provision_signature_identity(duplicate)
                 logger.info('Duplicate Google petition support prevented petition=%s signature=%s.', petition.pk, duplicate.pk)
                 PetitionSignature.objects.filter(pk=duplicate.pk).update(duplicate_attempts=F('duplicate_attempts') + 1)
                 AuditLog.objects.create(action='Duplicate Google support prevented', object_reference=f'PetitionSignature:{duplicate.pk}')
@@ -263,6 +265,7 @@ def google_petition_support(request, slug):
             signature.user_agent_hash = request_fingerprint(request.META.get('HTTP_USER_AGENT',''), settings.SECRET_KEY)
             signature.verification_metadata = {'google_issuer':identity['issuer'],'turnstile_hostname':turnstile.get('hostname','')}
             signature.save()
+            provision_signature_identity(signature)
             AuditLog.objects.create(action='Google support verified', object_reference=f'PetitionSignature:{signature.pk}')
     except IntegrityError:
         existing = PetitionSignature.objects.filter(petition=petition).filter(Q(google_subject=identity['sub']) | Q(normalized_email=email, is_verified=True)).first()
@@ -297,15 +300,17 @@ def petition_resend(request, slug):
     return JsonResponse({'ok':False,'message':'Email verification has been discontinued. Please use Google verification on the petition page.'}, status=410)
 
 def talk(request):
-    return render(request, 'listening/start.html', {'stories': public_stories(request.anonymous_reaction_key)[:3]})
+    return render(request, 'listening/start.html', {'stories': public_stories(request.anonymous_reaction_key, request.private_identity)[:3]})
 
 def share(request, kind='text'):
-    if kind not in {'text','audio','video'}: kind = 'text'
+    if kind not in {'text','audio','image','video'}: kind = 'text'
     if request.method == 'POST':
         form = ListeningRequestForm(request.POST, request.FILES, instance=ListeningRequest(kind=kind))
         if form.is_valid():
             item = form.save(commit=False); item.kind = kind
             item.user = request.user if request.user.is_authenticated else None
+            item.private_identity = request.private_identity
+            item.guest_key = '' if request.private_identity else request.anonymous_reaction_key
             item.consent_at = timezone.now()
             item.publication_status = 'review' if item.public_sharing_consent else 'private'
             item.save()
@@ -325,7 +330,7 @@ def safety(request):
     return render(request, 'support/safety.html', {'resources':SupportResource.objects.filter(verified=True)})
 
 def stories(request):
-    queryset = public_stories(request.anonymous_reaction_key)
+    queryset = public_stories(request.anonymous_reaction_key, request.private_identity)
     return render(request, 'stories/feed.html', {
         'written_stories': queryset.filter(story_format='text')[:4],
         'audio_stories': queryset.filter(story_format='voice')[:4],
@@ -334,7 +339,7 @@ def stories(request):
         'featured_stories': queryset.filter(featured=True)[:3],
     })
 
-def public_stories(anonymous_key=''):
+def public_stories(anonymous_key='', private_identity=None):
     valid_source=Q(
         source_was_listening_request=True,
         source_listening_request__isnull=False,
@@ -346,7 +351,10 @@ def public_stories(anonymous_key=''):
     )
     independent=Q(source_was_listening_request=False,source_listening_request__isnull=True)
     valid_content=Q(story_format='text')|~Q(public_media='')
-    visitor_reaction=StoryReaction.objects.filter(story=OuterRef('pk'),anonymous_key=anonymous_key,reaction='with_you')
+    visitor_lookup=Q(anonymous_key=anonymous_key)
+    if private_identity:
+        visitor_lookup=Q(private_identity=private_identity)
+    visitor_reaction=StoryReaction.objects.filter(visitor_lookup,story=OuterRef('pk'),reaction='with_you')
     return Story.objects.filter(
         approved=True,
         moderation_status='published',
@@ -355,14 +363,14 @@ def public_stories(anonymous_key=''):
         removed_at__isnull=True,
     ).filter(valid_source|independent).filter(valid_content).annotate(
         reaction_count=Count('reactions', distinct=True),
-        has_current_visitor_reacted=Exists(visitor_reaction) if anonymous_key else Value(False,output_field=BooleanField()),
+        has_current_visitor_reacted=Exists(visitor_reaction) if (anonymous_key or private_identity) else Value(False,output_field=BooleanField()),
         comment_count=Count('comments', filter=Q(comments__approved=True,comments__status='approved',comments__removed_at__isnull=True), distinct=True),
     ).order_by('-featured','-published_at','-created_at')
 
 def story_format_page(request, story_format):
     templates={'text':'stories/text_stories.html','voice':'stories/voice_stories.html','video':'stories/video_stories.html'}
     if story_format not in templates: return redirect('stories')
-    queryset=public_stories(request.anonymous_reaction_key).filter(story_format=story_format)
+    queryset=public_stories(request.anonymous_reaction_key, request.private_identity).filter(story_format=story_format)
     available_dates=sorted({
         timezone.localdate(item.published_at or item.created_at)
         for item in queryset.only('published_at','created_at')
@@ -399,13 +407,13 @@ TOPIC_PAGES={
 def story_topic_page(request, topic):
     if topic not in TOPIC_PAGES: return redirect('stories')
     template,title=TOPIC_PAGES[topic]
-    queryset=public_stories(request.anonymous_reaction_key).filter(topic=topic)
+    queryset=public_stories(request.anonymous_reaction_key, request.private_identity).filter(topic=topic)
     page=Paginator(queryset,9).get_page(request.GET.get('page'))
     return render(request,template,{'page_obj':page,'stories':page.object_list,'featured':queryset.first(),'text_stories':queryset.filter(story_format='text')[:4],'voice_stories':queryset.filter(story_format='voice')[:3],'video_stories':queryset.filter(story_format='video')[:3],'topic_title':title,'topic_key':topic})
 
 def story_detail(request, slug):
-    story = get_object_or_404(public_stories(request.anonymous_reaction_key), slug=slug)
-    related=public_stories(request.anonymous_reaction_key).filter(topic=story.topic).exclude(pk=story.pk)[:3]
+    story = get_object_or_404(public_stories(request.anonymous_reaction_key, request.private_identity), slug=slug)
+    related=public_stories(request.anonymous_reaction_key, request.private_identity).filter(topic=story.topic).exclude(pk=story.pk)[:3]
     public_filter=Q(approved=True,status='approved',removed_at__isnull=True)
     latest_ids=story.comments.filter(public_filter,parent__isnull=True).order_by().values('display_name','body').annotate(latest_id=Max('pk')).values('latest_id')
     comments=story.comments.filter(public_filter,parent__isnull=True,pk__in=Subquery(latest_ids)).prefetch_related('replies').order_by('-created_at')
@@ -425,10 +433,13 @@ def _rate_limited(request, key, limit, window_seconds):
     return limited
 
 def story_comments(request, pk):
-    story=get_object_or_404(public_stories(request.anonymous_reaction_key),pk=pk)
+    story=get_object_or_404(public_stories(request.anonymous_reaction_key, request.private_identity),pk=pk)
     public_filter=Q(approved=True,status='approved',removed_at__isnull=True)
     latest_top_ids=story.comments.filter(public_filter,parent__isnull=True).order_by().values('display_name','body').annotate(latest_id=Max('pk')).values('latest_id')
-    visitor_support=CommentReaction.objects.filter(comment=OuterRef('pk'),session_key_hash=request.anonymous_reaction_key)
+    visitor_support_lookup=Q(session_key_hash=request.anonymous_reaction_key)
+    if request.private_identity:
+        visitor_support_lookup=Q(private_identity=request.private_identity)
+    visitor_support=CommentReaction.objects.filter(visitor_support_lookup,comment=OuterRef('pk'))
     public_replies=StoryComment.objects.filter(public_filter).annotate(
         visitor_supported=Exists(visitor_support),
         like_count=Count('reactions'),
@@ -458,7 +469,7 @@ def story_comments(request, pk):
 @require_POST
 def story_comment(request, pk):
     if _rate_limited(request,'comment',5,600): return JsonResponse({'ok':False,'message':'Please wait before sending another response.'},status=429)
-    story=get_object_or_404(public_stories(request.anonymous_reaction_key),pk=pk)
+    story=get_object_or_404(public_stories(request.anonymous_reaction_key, request.private_identity),pk=pk)
     if story.comment_mode=='none': return JsonResponse({'ok':False,'message':'Comments are disabled for this story.'},status=403)
     body=request.POST.get('body','').strip()
     if len(body)<3 or len(body)>800: return JsonResponse({'ok':False,'message':'Please write a meaningful response between 3 and 800 characters.'},status=400)
@@ -476,15 +487,22 @@ def story_comment(request, pk):
 @require_POST
 def react(request, pk):
     if _rate_limited(request,'post-reaction',30,60): return JsonResponse({'ok':False,'message':'Please slow down.'},status=429)
-    public_story=get_object_or_404(public_stories(request.anonymous_reaction_key),pk=pk)
+    public_story=get_object_or_404(public_stories(request.anonymous_reaction_key, request.private_identity),pk=pk)
     with transaction.atomic():
         story=Story.objects.select_for_update().get(pk=public_story.pk)
-        existing=StoryReaction.objects.filter(story=story,anonymous_key=request.anonymous_reaction_key,reaction='with_you').first()
+        owner_lookup=Q(private_identity=request.private_identity) if request.private_identity else Q(anonymous_key=request.anonymous_reaction_key,private_identity__isnull=True)
+        existing=StoryReaction.objects.filter(owner_lookup,story=story,reaction='with_you').first()
         if existing:
             existing.delete()
             active=False
         else:
-            StoryReaction.objects.create(story=story,session_key=request.anonymous_reaction_key[:40],anonymous_key=request.anonymous_reaction_key,reaction='with_you')
+            StoryReaction.objects.create(
+                story=story,
+                session_key=request.anonymous_reaction_key[:40],
+                anonymous_key='' if request.private_identity else request.anonymous_reaction_key,
+                private_identity=request.private_identity,
+                reaction='with_you',
+            )
             active=True
         count=StoryReaction.objects.filter(story=story).count()
     if request.headers.get('x-requested-with')=='XMLHttpRequest' or request.POST.get('json'):
@@ -495,13 +513,14 @@ def react(request, pk):
 def comment_react(request, pk):
     if _rate_limited(request,'comment-reaction',30,60): return JsonResponse({'ok':False,'message':'Please slow down.'},status=429)
     with transaction.atomic():
-        comment=get_object_or_404(StoryComment.objects.select_for_update(),pk=pk,approved=True,status='approved',removed_at__isnull=True,story__in=public_stories(request.anonymous_reaction_key))
-        reaction=CommentReaction.objects.filter(comment=comment,session_key_hash=request.anonymous_reaction_key).first()
+        comment=get_object_or_404(StoryComment.objects.select_for_update(),pk=pk,approved=True,status='approved',removed_at__isnull=True,story__in=public_stories(request.anonymous_reaction_key, request.private_identity))
+        owner_lookup=Q(private_identity=request.private_identity) if request.private_identity else Q(session_key_hash=request.anonymous_reaction_key,private_identity__isnull=True)
+        reaction=CommentReaction.objects.filter(owner_lookup,comment=comment).first()
         if reaction:
             reaction.delete()
             active=False
         else:
-            CommentReaction.objects.create(comment=comment,session_key_hash=request.anonymous_reaction_key)
+            CommentReaction.objects.create(comment=comment,session_key_hash=request.anonymous_reaction_key,private_identity=request.private_identity)
             active=True
         count=CommentReaction.objects.filter(comment=comment).count()
     return JsonResponse({'ok':True,'active':active,'count':count})
@@ -514,6 +533,73 @@ def comment_report(request, pk):
     if reason not in dict(CommentReport.REASONS): return JsonResponse({'ok':False,'message':'Choose a report reason.'},status=400)
     _,created=CommentReport.objects.get_or_create(comment=comment,session_key_hash=_session_hash(request),defaults={'reason':reason,'details':request.POST.get('details','')[:500]})
     return JsonResponse({'ok':True,'message':'Thank you. Staff will review this response.','created':created})
+
+def my_space(request):
+    identity=request.private_identity
+    guest_submissions=ListeningRequest.objects.none()
+    submissions=ListeningRequest.objects.none()
+    reactions=StoryReaction.objects.none()
+    supported=CommentReaction.objects.none()
+    if identity:
+        submissions=identity.submissions.select_related('published_story').only(
+            'public_id','kind','title','message','created_at','status',
+            'publication_status','reviewed_at','published_story__published_at',
+        ).order_by('-created_at')
+        reactions=identity.story_reactions.select_related('story').filter(
+            story__approved=True,
+            story__moderation_status='published',
+            story__removed_at__isnull=True,
+        ).order_by('-created_at')
+        supported=identity.comment_reactions.select_related('comment','comment__story').filter(
+            comment__approved=True,
+            comment__status='approved',
+            comment__removed_at__isnull=True,
+        ).order_by('-created_at')
+        PrivateIdentity.objects.filter(pk=identity.pk).update(last_seen_at=timezone.now())
+    else:
+        guest_submissions=ListeningRequest.objects.filter(
+            guest_key=request.anonymous_reaction_key,
+            private_identity__isnull=True,
+        ).only('public_id','kind','title','message','created_at','status','publication_status').order_by('-created_at')
+    return render(request,'private_space/index.html',{
+        'identity':identity,
+        'submissions':submissions,
+        'guest_submissions':guest_submissions,
+        'reactions':reactions,
+        'supported_responses':supported,
+        'google_client_id':settings.GOOGLE_CLIENT_ID,
+    })
+
+@require_POST
+def my_space_google_sync(request):
+    if _rate_limited(request,'private-identity',10,600):
+        return JsonResponse({'ok':False,'message':'Please wait before trying again.'},status=429)
+    credential=request.POST.get('credential','')
+    consent=request.POST.get('sync_consent') in {'1','true','on'}
+    if not consent:
+        return JsonResponse({'ok':False,'message':'Private sync was not enabled.'},status=400)
+    try:
+        proof=_verify_google_credential(credential)
+        identity=resolve_google_identity(proof['sub'],proof['email'],consent=True)
+        merge_guest_activity(identity,request.anonymous_reaction_key)
+    except PermissionError:
+        return JsonResponse({'ok':False,'message':'This Google account does not have a verified email.'},status=400)
+    except Exception as exc:
+        logger.warning('Private identity verification failed type=%s.',type(exc).__name__)
+        return JsonResponse({'ok':False,'message':'We could not verify this Google account.'},status=400)
+    request.session.cycle_key()
+    request.session['private_identity_id']=identity.pk
+    return JsonResponse({
+        'ok':True,
+        'redirect':reverse('my_space'),
+        'message':'Your private activity is ready. Your petition support was not submitted again.',
+    })
+
+@require_POST
+def my_space_sign_out(request):
+    request.session.pop('private_identity_id',None)
+    request.session.cycle_key()
+    return redirect('my_space')
 
 @require_POST
 def withdraw_consent(request):

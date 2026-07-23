@@ -28,6 +28,17 @@ class AnonymousReactionCookieMiddleware:
             raw.encode(),
             hashlib.sha256,
         ).hexdigest()
+        request.private_identity = None
+        identity_id = request.session.get('private_identity_id')
+        if identity_id:
+            from .models import PrivateIdentity
+            request.private_identity = PrivateIdentity.objects.filter(
+                pk=identity_id,
+                is_active=True,
+                sync_consent_at__isnull=False,
+            ).first()
+            if request.private_identity is None:
+                request.session.pop('private_identity_id', None)
         response = self.get_response(request)
         if should_set:
             response.set_cookie(

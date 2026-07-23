@@ -279,10 +279,11 @@ class PetitionAdmin(admin.ModelAdmin):
 
 @admin.register(PetitionSignature)
 class PetitionSignatureAdmin(admin.ModelAdmin):
-    list_display=('name','masked_email','supporter_type','petition','verification_label','is_verified','moderation_status','verified_at','created_at')
+    list_display=('id','masked_email','supporter_type','petition','verification_label','identity_state','moderation_status','verified_at','created_at')
     list_filter=('petition','verification_method','is_verified','moderation_status','supporter_type')
-    search_fields=('name','email','normalized_email','google_subject')
-    readonly_fields=('normalized_email','google_subject','verified_email','verification_method','google_verified_at','turnstile_verified_at','verification_metadata','verification_token','token_created_at','verification_email_sent_at','verification_email_attempts','verification_email_failures','duplicate_attempts','resend_available_at','is_verified','verified','verified_at','ip_hash','user_agent_hash','created_at','updated_at')
+    search_fields=('id','petition__title')
+    readonly_fields=('masked_email','verification_method','google_verified_at','turnstile_verified_at','verification_metadata','verification_email_sent_at','verification_email_attempts','verification_email_failures','duplicate_attempts','resend_available_at','is_verified','verified','verified_at','private_identity','created_at','updated_at')
+    exclude=('email','normalized_email','verified_email','google_subject','verification_token','token_created_at','ip_hash','user_agent_hash')
     actions=('mark_valid','flag_for_review','mark_spam','reject_signatures','remove_signatures','restore_signatures','export_verified')
     def _moderate(self,request,queryset,status):
         count=queryset.update(moderation_status=status)
@@ -298,6 +299,9 @@ class PetitionSignatureAdmin(admin.ModelAdmin):
         if obj.verification_method == 'google' and obj.is_verified: return 'Google Verified'
         if obj.is_verified: return 'Legacy Email Verified'
         return 'Pending Legacy Email'
+    @admin.display(description='Private identity')
+    def identity_state(self,obj):
+        return obj.private_identity.identity_status if obj.private_identity_id else 'Not linked'
     @admin.action(description='Flag selected signatures for review')
     def flag_for_review(self,request,queryset): self._moderate(request,queryset,'pending')
     @admin.action(description='Mark selected signatures as spam')
@@ -318,8 +322,8 @@ class PetitionSignatureAdmin(admin.ModelAdmin):
         import csv
         from django.http import HttpResponse
         response=HttpResponse(content_type='text/csv'); response['Content-Disposition']='attachment; filename="verified-petition-signatures.csv"'
-        writer=csv.writer(response); writer.writerow(['Name','Email','Role','Petition','Verified at'])
-        for item in queryset.filter(is_verified=True,moderation_status='valid',removed_at__isnull=True): writer.writerow([item.name,item.email,item.get_supporter_type_display(),item.petition,item.verified_at])
+        writer=csv.writer(response); writer.writerow(['Internal ID','Role','Petition','Verified at'])
+        for item in queryset.filter(is_verified=True,moderation_status='valid',removed_at__isnull=True): writer.writerow([item.pk,item.get_supporter_type_display(),item.petition_id,item.verified_at])
         AuditLog.objects.create(actor=request.user,action='Exported verified signatures',object_reference='PetitionSignature export')
         return response
 
@@ -379,10 +383,12 @@ class StoryReactionAdmin(admin.ModelAdmin):
     list_display=('story','reaction','identity_type','anonymous_hash','created_at')
     list_filter=('reaction','created_at')
     search_fields=('story__title',)
-    readonly_fields=('story','reaction','identity_type','anonymous_hash','created_at','updated_at')
+    readonly_fields=('story','reaction','private_identity','identity_type','anonymous_hash','created_at','updated_at')
     exclude=('session_key','anonymous_key')
     @admin.display(description='Identity')
-    def identity_type(self,obj): return 'Anonymous browser' if obj.anonymous_key else 'Legacy session'
+    def identity_type(self,obj):
+        if obj.private_identity_id: return 'Private synced identity'
+        return 'Anonymous browser' if obj.anonymous_key else 'Legacy session'
     @admin.display(description='Anonymous hash')
     def anonymous_hash(self,obj):
         value=obj.anonymous_key or obj.session_key
@@ -392,10 +398,23 @@ class StoryReactionAdmin(admin.ModelAdmin):
 class CommentReactionAdmin(admin.ModelAdmin):
     list_display=('comment','anonymous_hash','created_at')
     search_fields=('comment__body','comment__story__title')
-    readonly_fields=('comment','anonymous_hash','created_at','updated_at')
+    readonly_fields=('comment','private_identity','anonymous_hash','created_at','updated_at')
     exclude=('session_key_hash',)
     @admin.display(description='Anonymous hash')
     def anonymous_hash(self,obj): return f'{obj.session_key_hash[:10]}…'
+
+@admin.register(PrivateIdentity)
+class PrivateIdentityAdmin(admin.ModelAdmin):
+    list_display=('id','identity_status','source','sync_consent_at','last_seen_at','is_active','internal_reference')
+    list_filter=('identity_status','source','is_active')
+    readonly_fields=('identity_status','source','sync_consent_at','last_seen_at','is_active','merged_into','internal_reference','created_at','updated_at')
+    exclude=('google_sub_hash','legacy_email_hash')
+    @admin.display(description='Internal reference')
+    def internal_reference(self,obj):
+        value=obj.google_sub_hash or obj.legacy_email_hash or ''
+        return f'{value[:10]}…' if value else 'None'
+    def has_add_permission(self,request): return False
+    def has_delete_permission(self,request,obj=None): return False
 
 admin.site.register([UserProfile, ListenerProfile, ConversationMessage, AccountabilityEvent, EvidenceDocument, PublicQuestion, PromiseTracker, AuthorityResponse, SupportResource, VolunteerApplication, AuditLog])
 admin.site.site_header = 'Unmute India moderation'

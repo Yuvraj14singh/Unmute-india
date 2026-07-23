@@ -20,6 +20,30 @@ class TimeStampedModel(models.Model):
     class Meta:
         abstract = True
 
+class PrivateIdentity(TimeStampedModel):
+    STATUSES = [
+        ('confirmed_google','Confirmed Google'),
+        ('provisional_legacy','Provisional legacy'),
+        ('guest_only','Guest only'),
+        ('merged','Merged'),
+        ('inactive','Inactive'),
+    ]
+    SOURCES = [
+        ('petition_migration','Migrated petition verification'),
+        ('google_sync','Google private sync'),
+        ('guest_upgrade','Guest upgraded to Google'),
+    ]
+    google_sub_hash = models.CharField(max_length=64, null=True, blank=True, unique=True)
+    legacy_email_hash = models.CharField(max_length=64, null=True, blank=True, unique=True)
+    identity_status = models.CharField(max_length=24, choices=STATUSES, db_index=True)
+    source = models.CharField(max_length=24, choices=SOURCES)
+    sync_consent_at = models.DateTimeField(null=True, blank=True)
+    last_seen_at = models.DateTimeField(default=timezone.now)
+    is_active = models.BooleanField(default=True, db_index=True)
+    merged_into = models.ForeignKey('self', null=True, blank=True, related_name='merged_identities', on_delete=models.PROTECT)
+    def __str__(self):
+        return f'Private identity #{self.pk} ({self.identity_status})'
+
 class UserProfile(TimeStampedModel):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     display_name = models.CharField(max_length=80, blank=True)
@@ -37,7 +61,7 @@ class ListenerProfile(TimeStampedModel):
     max_active_conversations = models.PositiveSmallIntegerField(default=5)
 
 class ListeningRequest(TimeStampedModel):
-    TYPES = [('text','Text'),('audio','Audio'),('video','Video')]
+    TYPES = [('text','Text'),('audio','Audio'),('image','Image'),('video','Video')]
     NEEDS = [('listen','Just listen'),('reply','Send a supportive reply'),('think','Help me think through this'),('trusted','Help me talk to someone I trust'),('unsure','I am not sure')]
     STATUS = [('new','New'),('assigned','Assigned'),('active','Active'),('closed','Closed')]
     PUBLICATION_STATUS = [('private','Private — not submitted for publication'),('review','Public sharing review requested'),('published','Approved and published'),('rejected','Public sharing declined'),('removed','Unpublished by staff')]
@@ -46,7 +70,9 @@ class ListeningRequest(TimeStampedModel):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     kind = models.CharField(max_length=10, choices=TYPES, default='text')
     message = models.TextField(blank=True)
-    media = models.FileField(upload_to=private_upload, blank=True, validators=[FileExtensionValidator(['mp3','m4a','wav','ogg','webm','mp4','mov'])])
+    media = models.FileField(upload_to=private_upload, blank=True, validators=[FileExtensionValidator(['mp3','m4a','wav','ogg','webm','mp4','mov','jpg','jpeg','png','webp'])])
+    private_identity = models.ForeignKey(PrivateIdentity, null=True, blank=True, related_name='submissions', on_delete=models.PROTECT)
+    guest_key = models.CharField(max_length=64, blank=True, db_index=True, editable=False)
     anonymous = models.BooleanField(default=True)
     wants_reply = models.BooleanField(default=True)
     support_preference = models.CharField(max_length=12, choices=NEEDS, blank=True)
@@ -170,11 +196,13 @@ class StoryReaction(TimeStampedModel):
     story = models.ForeignKey(Story, related_name='reactions', on_delete=models.CASCADE)
     session_key = models.CharField(max_length=40)
     anonymous_key = models.CharField(max_length=64, blank=True, db_index=True)
+    private_identity = models.ForeignKey(PrivateIdentity, null=True, blank=True, related_name='story_reactions', on_delete=models.CASCADE)
     reaction = models.CharField(max_length=16, choices=REACTIONS)
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=['story','session_key','reaction'], name='unique_story_reaction'),
             models.UniqueConstraint(fields=['story','anonymous_key','reaction'], condition=~Q(anonymous_key=''), name='unique_anonymous_story_reaction'),
+            models.UniqueConstraint(fields=['story','private_identity','reaction'], condition=Q(private_identity__isnull=False), name='unique_private_story_reaction'),
         ]
 
 class StoryComment(TimeStampedModel):
@@ -199,8 +227,12 @@ class StoryComment(TimeStampedModel):
 class CommentReaction(TimeStampedModel):
     comment = models.ForeignKey(StoryComment, related_name='reactions', on_delete=models.CASCADE)
     session_key_hash = models.CharField(max_length=64)
+    private_identity = models.ForeignKey(PrivateIdentity, null=True, blank=True, related_name='comment_reactions', on_delete=models.CASCADE)
     class Meta:
-        constraints = [models.UniqueConstraint(fields=['comment','session_key_hash'], name='unique_comment_reaction')]
+        constraints = [
+            models.UniqueConstraint(fields=['comment','session_key_hash'], name='unique_comment_reaction'),
+            models.UniqueConstraint(fields=['comment','private_identity'], condition=Q(private_identity__isnull=False), name='unique_private_comment_reaction'),
+        ]
 
 class CommentReport(TimeStampedModel):
     REASONS = [('harassment','Harassment'),('privacy','Reveals identity/private details'),('unsafe','Unsafe advice'),('spam','Spam'),('hate','Hate or abuse'),('other','Other')]
@@ -340,6 +372,7 @@ class PetitionSignature(TimeStampedModel):
     google_verified_at = models.DateTimeField(null=True, blank=True)
     turnstile_verified_at = models.DateTimeField(null=True, blank=True)
     verification_metadata = models.JSONField(default=dict, blank=True)
+    private_identity = models.ForeignKey(PrivateIdentity, null=True, blank=True, related_name='petition_signatures', on_delete=models.PROTECT)
     def save(self, *args, **kwargs):
         self.normalized_email = self.email.strip().casefold()
         self.email = self.email.strip()

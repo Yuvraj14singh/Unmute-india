@@ -243,6 +243,7 @@ EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False').strip().lower() in ('1'
 EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '20'))
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '').strip()
+PRIVATE_IDENTITY_HMAC_KEY = os.environ.get('PRIVATE_IDENTITY_HMAC_KEY', SECRET_KEY).strip()
 TURNSTILE_SITE_KEY = os.environ.get('TURNSTILE_SITE_KEY', '').strip()
 TURNSTILE_SECRET_KEY = os.environ.get('TURNSTILE_SECRET_KEY', '').strip()
 PETITION_VERIFICATION_EXPIRY_HOURS = int(os.environ.get('PETITION_VERIFICATION_EXPIRY_HOURS', '24'))

@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Share an Image Privately | Unmute India{% endblock %}
+{% block css %}<link rel="stylesheet" href="{% static 'css/listening/share.css' %}">{% endblock %}
+{% block content %}
+<section class="share-shell">
+  <div><p class="eyebrow green">PRIVATE IMAGE</p><h1>Share what words cannot.</h1><p>Your image stays private unless you separately request anonymous public review.</p></div>
+  <form method="post" enctype="multipart/form-data" class="share-card">{% csrf_token %}
+    {% if form.errors %}<div class="share-form-errors" role="alert">Please check the highlighted details.</div>{% endif %}
+    <label>Image{{ form.media }}{{ form.media.errors }}</label>
+    <label>Optional title{{ form.title }}{{ form.title.errors }}</label>
+    <label>Optional context{{ form.message }}{{ form.message.errors }}</label>
+    {{ form.category }}{{ form.support_preference }}{{ form.comment_preference }}
+    <label>{{ form.anonymous }} Keep me anonymous</label>
+    <label>{{ form.wants_reply }} I would like a reply</label>
+    <label>{{ form.public_sharing_consent }} {{ form.public_sharing_consent.label }}</label>
+    <label>{{ form.consent }} {{ form.consent.label }}</label>
+    <button class="pill saffron" type="submit">Send privately</button>
+  </form>
+</section>
+{% endblock %}
