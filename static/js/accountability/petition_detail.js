@@ -75,14 +75,8 @@ if (petitionForm) {
     steps.details?.classList.toggle('is-complete', detailsComplete);
     steps.human?.classList.toggle('is-complete', checks.turnstile_token);
     steps.google?.classList.toggle('is-active', detailsComplete && checks.turnstile_token);
-    // Keep the Google iframe's complete visual surface tappable. Disabling its
-    // parent while forcing pointer-events on the child produced a mismatched
-    // mobile hit area where only an overflowing edge received taps.
-    // Never disable the cross-origin GIS iframe with pointer-events. On mobile
-    // browsers that can leave the painted button visible while its hit target is
-    // unavailable. Submission validation still runs in submitCredential().
-    googleShell.classList.remove('is-disabled');
-    googleShell.setAttribute('aria-disabled', 'false');
+    googleShell.classList.toggle('is-disabled', !ready);
+    googleShell.setAttribute('aria-disabled', String(!ready));
 
     if (!detailsComplete) {
       activeStep.textContent = 'Complete your details';
@@ -208,7 +202,6 @@ if (petitionForm) {
         click_listener: () => {
           status.className = 'form-response';
           status.textContent = '';
-          validate(true);
         },
       });
       googleButtonRendered = true;
