@@ -7,11 +7,12 @@
   <div class="studio-intro"><a class="back-link" href="{% url 'talk' %}">← Back to sharing options</a><p class="eyebrow green">PRIVATE VOICE STUDIO</p><h1>Pause. Breathe. <em>Speak in your own time.</em></h1><p class="studio-lead">Your voice does not need to sound confident. Silence, pauses and imperfect words are welcome here.</p><div class="studio-promises"><span>◇ No autoplay</span><span>◇ Microphone starts only with permission</span><span>◇ Delete or re-record before sending</span></div></div>
   <div class="studio-panel">
     <div class="panel-top"><span>VOICE NOTE</span><span class="live-dot">● Private session</span></div>
-    <div class="recorder"><button type="button" id="record" aria-label="Start voice recording">●</button><div><strong id="state">Ready to record</strong><span id="timer">00:00</span></div><audio id="preview" controls hidden></audio></div>
+    <div class="recorder" data-state="ready"><button type="button" id="record" aria-label="Start voice recording">●</button><div><strong id="state">Ready to record</strong><span id="timer">00:00</span></div><audio id="preview" controls hidden></audio></div>
+    <div class="recording-actions"><button type="button" id="deleteRecording" hidden>Delete recording</button><button type="button" id="recordAgain" hidden>Record again</button><button type="button" id="useRecording" hidden>Use this recording</button></div>
     <p class="rec-hint">Tap once to begin and again to stop. Nothing is sent automatically.</p>
     <form method="post" enctype="multipart/form-data">
       {% csrf_token %}
-      <label class="upload-zone" for="id_media"><span>↑</span><b>Upload an existing audio file</b><small>MP3, M4A, WAV, OGG or WEBM · up to 25 MB</small>{{ form.media }}</label>
+      <div class="upload-zone"><span>↑</span><b>Upload an existing audio file</b><small>MP3, M4A, WAV, OGG or WEBM · up to 25 MB</small><label class="pill" for="id_media">Choose audio file</label>{{ form.media }}<span data-file-details>No file selected</span><button type="button" data-remove-file hidden>Remove</button></div>
       <div hidden>{{ form.message }}</div>
       <div class="choice-checks">
         <label class="check">{{ form.anonymous }} <span>Keep me anonymous</span></label>
@@ -19,6 +20,7 @@
         <label class="check">{{ form.consent }} <span>{{ form.consent.label }}</span></label>
         <label class="check public-review-choice">{{ form.public_sharing_consent }} <span>{{ form.public_sharing_consent.label }}</span></label>
       </div>
+      <fieldset><legend>Comments if approved publicly</legend>{{ form.comment_preference }}</fieldset>
       <p class="warning">Privacy check: remove phone numbers, addresses, identity numbers and other sensitive information.</p>
       <button class="pill submit-share" type="submit">Send voice note privately <span>→</span></button>
     </form>

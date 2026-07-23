@@ -9,3 +9,4 @@
   border-radius: 14px;
   background: linear-gradient(120deg, rgba(19, 136, 8, .08), rgba(255, 153, 51, .07));
 }
+.upload-zone input[type=file]{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.upload-zone .pill{margin:.7rem 0;display:inline-flex}.recording-actions{display:flex;gap:.6rem;flex-wrap:wrap;margin:.8rem 0}.recording-actions button,.upload-zone button{min-height:44px;border:1px solid #52705d77;border-radius:999px;background:transparent;color:inherit;padding:.6rem .9rem}.typing-pad input[type=text],.typing-pad select{width:100%;box-sizing:border-box;padding:.85rem;border:1px solid #53675b55;border-radius:12px;background:var(--paper);color:inherit}.tracking-code{margin:1.5rem auto;padding:1rem;border:1px dashed var(--green);border-radius:16px;max-width:520px}.tracking-code strong{display:block;font:2rem monospace;margin:.5rem}.tracking-code button{min-height:44px}

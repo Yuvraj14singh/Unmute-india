@@ -11,15 +11,15 @@ class ListeningRequestAdmin(admin.ModelAdmin):
     list_display=('public_id','kind','status','publication_status','public_sharing_consent','published_story','safety_flag','assigned_to','created_at')
     list_filter=('kind','status','publication_status','public_sharing_consent','anonymous','safety_flag')
     search_fields=('public_id','message')
-    readonly_fields=('public_id','privacy','public_sharing_consent','publication_status','published_story','reviewed_by','reviewed_at','consent_at','created_at','updated_at')
+    readonly_fields=('public_id','tracking_code','privacy','public_sharing_consent','publication_status','published_story','reviewed_by','reviewed_at','consent_at','public_consent_withdrawn_at','created_at','updated_at')
     list_editable=('status','assigned_to')
     date_hierarchy='created_at'
     ordering=('-safety_flag','-created_at')
     list_per_page=30
     actions=('approve_and_publish','decline_publication')
     fieldsets=(
-        ('Private submission', {'fields':('public_id','kind','message','media','anonymous','wants_reply','support_preference','privacy','status','assigned_to','safety_flag')}),
-        ('Public sharing decision', {'fields':('public_sharing_consent','publication_status','published_story','reviewed_by','reviewed_at'), 'description':'Only submissions with explicit public-sharing consent may be published. Review and remove personal details before approval.'}),
+        ('Private submission', {'fields':('public_id','tracking_code','kind','title','category','message','media','anonymous','wants_reply','support_preference','privacy','status','assigned_to','safety_flag')}),
+        ('Public sharing decision', {'fields':('public_sharing_consent','public_consent_withdrawn_at','comment_preference','privacy_review_complete','publication_status','published_story','reviewed_by','reviewed_at','moderation_notes'), 'description':'Only submissions with explicit public-sharing consent may be published. Review and remove personal details before approval.'}),
         ('Record', {'fields':('consent_at','created_at','updated_at')}),
     )
 
@@ -34,7 +34,7 @@ class ListeningRequestAdmin(admin.ModelAdmin):
                 with transaction.atomic():
                     story = item.published_story or Story()
                     excerpt = ' '.join(item.message.split())[:72]
-                    story.title = story.title or (excerpt if excerpt else f'Anonymous {item.get_kind_display()} story')
+                    story.title = story.title or item.title or (excerpt if excerpt else f'Anonymous {item.get_kind_display()} message')
                     story.slug = story.slug or f"{slugify(story.title)[:48]}-{item.public_id.hex[:8]}"
                     story.body = item.message.strip() or f'An anonymous student shared this {item.get_kind_display().lower()} story.'
                     story.display_name = 'Anonymous Student'
@@ -44,6 +44,7 @@ class ListeningRequestAdmin(admin.ModelAdmin):
                     story.moderation_status = 'published'
                     story.public_consent = True
                     story.privacy_review_complete = True
+                    story.comment_mode = item.comment_preference
                     story.published_at = story.published_at or timezone.now()
                     story.save()
                     if item.media and not story.public_media:
@@ -60,7 +61,7 @@ class ListeningRequestAdmin(admin.ModelAdmin):
             except Exception:
                 failed += 1
         if published:
-            self.message_user(request, f'{published} submission(s) approved and published in Our Stories.', messages.SUCCESS)
+            self.message_user(request, f'{published} submission(s) approved and published in Unmuted Voices.', messages.SUCCESS)
         if skipped:
             self.message_user(request, f'{skipped} submission(s) skipped because public consent was absent, already decided, or not awaiting review.', messages.WARNING)
         if failed:
@@ -165,7 +166,34 @@ class StoryAdmin(admin.ModelAdmin):
         super().save_model(request,obj,form,change)
         AuditLog.objects.create(actor=request.user,action='Updated public story moderation' if change else 'Created story record',object_reference=f'Story:{obj.pk}:{obj.moderation_status}')
 
-admin.site.register([UserProfile, ListenerProfile, ConversationMessage, StoryReaction, StoryComment, AccountabilityEvent, EvidenceDocument, PublicQuestion, PromiseTracker, AuthorityResponse, SupportResource, VolunteerApplication, AuditLog])
+@admin.register(StoryComment)
+class StoryCommentAdmin(admin.ModelAdmin):
+    list_display=('story','display_name','status','parent','thread_locked','created_at')
+    list_filter=('status','approved','thread_locked')
+    actions=('approve','reject','remove','restore','mark_spam','lock_threads')
+    def _set(self,request,queryset,status,approved=False,removed_at=None):
+        count=queryset.update(status=status,approved=approved,removed_at=removed_at,approved_at=timezone.now() if approved else None)
+        AuditLog.objects.create(actor=request.user,action=f'Moderated {count} public responses as {status}',object_reference='StoryComment bulk action')
+    @admin.action(description='Approve selected responses')
+    def approve(self,r,q): self._set(r,q,'approved',True)
+    @admin.action(description='Reject selected responses')
+    def reject(self,r,q): self._set(r,q,'rejected')
+    @admin.action(description='Remove selected responses')
+    def remove(self,r,q): self._set(r,q,'removed',False,timezone.now())
+    @admin.action(description='Restore selected responses to approved')
+    def restore(self,r,q): self._set(r,q,'approved',True)
+    @admin.action(description='Mark selected responses as spam')
+    def mark_spam(self,r,q): self._set(r,q,'spam')
+    @admin.action(description='Lock selected threads')
+    def lock_threads(self,r,q): q.update(thread_locked=True)
+
+@admin.register(CommentReport)
+class CommentReportAdmin(admin.ModelAdmin):
+    list_display=('comment','reason','status','created_at')
+    list_filter=('reason','status')
+    readonly_fields=('comment','reason','details','session_key_hash','created_at','updated_at')
+
+admin.site.register([UserProfile, ListenerProfile, ConversationMessage, StoryReaction, CommentReaction, AccountabilityEvent, EvidenceDocument, PublicQuestion, PromiseTracker, AuthorityResponse, SupportResource, VolunteerApplication, AuditLog])
 admin.site.site_header = 'Unmute India moderation'
 admin.site.site_title = 'Unmute India Staff'
 admin.site.index_title = 'Moderation and platform operations'

@@ -1,6 +1,7 @@
 import os
 import uuid
 import hashlib
+import secrets
 from django.conf import settings
 from django.core.validators import FileExtensionValidator
 from django.db import models
@@ -37,6 +38,7 @@ class ListeningRequest(TimeStampedModel):
     NEEDS = [('listen','Just listen'),('reply','Send a supportive reply'),('think','Help me think through this'),('trusted','Help me talk to someone I trust'),('unsure','I am not sure')]
     STATUS = [('new','New'),('assigned','Assigned'),('active','Active'),('closed','Closed')]
     PUBLICATION_STATUS = [('private','Private — not submitted for publication'),('review','Public sharing review requested'),('published','Approved and published'),('rejected','Public sharing declined')]
+    CATEGORIES = [('unsaid','Something I cannot tell anyone'),('exam','Exam pressure'),('family','Family pressure'),('college','College or coaching pressure'),('confession','Personal confession'),('protest','Protest or accountability experience'),('message','A message for other students'),('hope','Hope or recovery'),('other','Other')]
     public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     kind = models.CharField(max_length=10, choices=TYPES, default='text')
@@ -55,6 +57,21 @@ class ListeningRequest(TimeStampedModel):
     published_story = models.OneToOneField('Story', null=True, blank=True, related_name='source_listening_request', on_delete=models.SET_NULL)
     reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name='reviewed_listening_requests', on_delete=models.SET_NULL)
     reviewed_at = models.DateTimeField(null=True, blank=True)
+    tracking_code = models.CharField(max_length=16, unique=True, null=True, blank=True, editable=False)
+    title = models.CharField(max_length=140, blank=True)
+    category = models.CharField(max_length=30, choices=CATEGORIES, blank=True)
+    comment_preference = models.CharField(max_length=10, choices=[('support','Supportive comments allowed'),('advice','Advice welcome'),('none','No comments')], default='support')
+    public_consent_withdrawn_at = models.DateTimeField(null=True, blank=True)
+    moderation_notes = models.TextField(blank=True)
+    privacy_review_complete = models.BooleanField(default=False)
+    def save(self, *args, **kwargs):
+        if not self.tracking_code:
+            while True:
+                code = 'UNM-' + ''.join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6))
+                if not type(self).objects.filter(tracking_code=code).exists():
+                    self.tracking_code = code
+                    break
+        super().save(*args, **kwargs)
 
 class ConversationMessage(TimeStampedModel):
     request = models.ForeignKey(ListeningRequest, related_name='replies', on_delete=models.CASCADE)
@@ -104,10 +121,39 @@ class StoryReaction(TimeStampedModel):
         constraints = [models.UniqueConstraint(fields=['story','session_key','reaction'], name='unique_story_reaction')]
 
 class StoryComment(TimeStampedModel):
+    STATUSES = [('pending','Pending'),('approved','Approved'),('rejected','Rejected'),('spam','Spam'),('removed','Removed')]
     story = models.ForeignKey(Story, related_name='comments', on_delete=models.CASCADE)
+    parent = models.ForeignKey('self', null=True, blank=True, related_name='replies', on_delete=models.CASCADE)
     display_name = models.CharField(max_length=80, blank=True)
     body = models.TextField(max_length=800)
     approved = models.BooleanField(default=False, db_index=True)
+    status = models.CharField(max_length=10, choices=STATUSES, default='pending', db_index=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    removed_at = models.DateTimeField(null=True, blank=True)
+    thread_locked = models.BooleanField(default=False)
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.parent and (self.parent.parent_id or self.parent.story_id != self.story_id):
+            raise ValidationError({'parent':'Replies may be nested one level only.'})
+    @property
+    def is_public(self):
+        return self.approved and self.status == 'approved' and not self.removed_at
+
+class CommentReaction(TimeStampedModel):
+    comment = models.ForeignKey(StoryComment, related_name='reactions', on_delete=models.CASCADE)
+    session_key_hash = models.CharField(max_length=64)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['comment','session_key_hash'], name='unique_comment_reaction')]
+
+class CommentReport(TimeStampedModel):
+    REASONS = [('harassment','Harassment'),('privacy','Reveals identity/private details'),('unsafe','Unsafe advice'),('spam','Spam'),('hate','Hate or abuse'),('other','Other')]
+    comment = models.ForeignKey(StoryComment, related_name='reports', on_delete=models.CASCADE)
+    reason = models.CharField(max_length=12, choices=REASONS)
+    details = models.CharField(max_length=500, blank=True)
+    status = models.CharField(max_length=12, choices=[('pending','Pending'),('reviewed','Reviewed'),('dismissed','Dismissed')], default='pending', db_index=True)
+    session_key_hash = models.CharField(max_length=64)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['comment','session_key_hash'], name='unique_comment_report')]
 
 class AccountabilityEvent(TimeStampedModel):
     CATEGORIES = [('exam','Exam conducted'),('allegation','Paper leak allegation'),('response','Official response'),('investigation','Investigation'),('reexam','Re-exam'),('protest','Student protest'),('police','Police action'),('statement','Minister statement'),('court','Court update'),('reform','Reform announcement'),('other','Other')]

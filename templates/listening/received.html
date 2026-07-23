@@ -4,8 +4,9 @@
 <section class="confirmation">
   <span>✓</span><h1>We received what you shared.</h1>
   <p>Speaking about it was an important step. A member of our team will read, listen to or watch it carefully.</p>
-  {% if public_review_requested %}<p>Your optional public-sharing request is awaiting moderation and a privacy review. It is not public yet.</p>{% else %}<p>This submission remains private and will not appear in Our Stories.</p>{% endif %}
-  {% if reference %}<small>Private reference: {{ reference }}</small>{% endif %}
+  {% if public_review_requested %}<p>Your optional public-sharing request is awaiting moderation and a privacy review. It is not public yet.</p>{% else %}<p>This submission remains private and will not appear in Unmuted Voices.</p>{% endif %}
+  {% if reference %}<div class="tracking-code"><small>Your private tracking code</small><strong id="trackingCode">{{ reference }}</strong><button type="button" data-copy-code>Copy code</button><p>Save this privately. It is not emailed and cannot be recovered without access to this screen.</p></div>{% endif %}
   <p>You can leave now and return whenever you feel ready.</p><a class="pill" href="{% url 'home' %}">Return home</a>
 </section>
+<script>document.querySelector('[data-copy-code]')?.addEventListener('click',async e=>{await navigator.clipboard.writeText(document.querySelector('#trackingCode').textContent);e.currentTarget.textContent='Copied'})</script>
 {% endblock %}

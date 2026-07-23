@@ -6,7 +6,7 @@ from django.utils import timezone
 from unittest.mock import patch
 from pathlib import Path
 from .forms import GooglePetitionSupportForm
-from .models import ListeningRequest, Petition, PetitionSignature, PublicQuestion, Story
+from .models import CommentReaction, CommentReport, ListeningRequest, Petition, PetitionSignature, PublicQuestion, Story, StoryComment
 from .utils import compact_count
 
 class PublicPageTests(TestCase):
@@ -241,5 +241,48 @@ class DedicatedStoryPageTests(TestCase):
         story=self.public_story('comments-closed'); story.comment_mode='none'; story.save()
         response=self.client.post(reverse('story_comment',args=[story.pk]),{'body':'I am listening.'})
         self.assertEqual(response.status_code,403)
+
+class UnmutedVoicesUpgradeTests(TestCase):
+    def setUp(self):
+        self.story=Story.objects.create(slug='public-voice',title='A public voice',body='What someone needed to say.',approved=True,moderation_status='published',public_consent=True,privacy_review_complete=True,published_at=timezone.now())
+
+    def test_public_name_and_format_only_navigation(self):
+        response=self.client.get(reverse('stories'))
+        self.assertContains(response,'Unmuted Voices')
+        self.assertContains(response,reverse('voices_text'))
+        self.assertNotContains(response,'Hope Stories')
+
+    def test_tracking_code_is_private_and_unpredictable(self):
+        item=ListeningRequest.objects.create(message='Private by default.')
+        self.assertRegex(item.tracking_code,r'^UNM-[A-HJ-NP-Z2-9]{6}$')
+        self.assertNotIn(str(item.pk),item.tracking_code)
+
+    def test_pending_reply_is_not_public_and_depth_is_limited(self):
+        parent=StoryComment.objects.create(story=self.story,body='I hear you.',approved=True,status='approved')
+        response=self.client.post(reverse('story_comment',args=[self.story.pk]),{'body':'You are not alone.','parent':parent.pk})
+        self.assertEqual(response.status_code,200)
+        self.assertNotContains(self.client.get(reverse('story_comments',args=[self.story.pk])),'You are not alone.')
+        reply=StoryComment.objects.get(parent=parent)
+        response=self.client.post(reverse('story_comment',args=[self.story.pk]),{'body':'A nested reply.','parent':reply.pk})
+        self.assertEqual(response.status_code,404)
+
+    def test_comment_reaction_toggles_and_report_enters_review(self):
+        comment=StoryComment.objects.create(story=self.story,body='Support.',approved=True,status='approved')
+        url=reverse('comment_react',args=[comment.pk])
+        self.assertTrue(self.client.post(url).json()['active'])
+        self.assertFalse(self.client.post(url).json()['active'])
+        self.assertEqual(CommentReaction.objects.count(),0)
+        response=self.client.post(reverse('comment_report',args=[comment.pk]),{'reason':'privacy'})
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(CommentReport.objects.get().status,'pending')
+
+    def test_consent_withdrawal_unpublishes_without_deleting(self):
+        item=ListeningRequest.objects.create(message='Private source',public_sharing_consent=True,publication_status='published',published_story=self.story)
+        response=self.client.post(reverse('withdraw_consent'),{'tracking_code':item.tracking_code})
+        self.assertEqual(response.status_code,200)
+        self.story.refresh_from_db(); item.refresh_from_db()
+        self.assertIsNotNone(self.story.removed_at)
+        self.assertFalse(item.public_sharing_consent)
+        self.assertTrue(ListeningRequest.objects.filter(pk=item.pk).exists())
 
 # Create your tests here.

@@ -16,7 +16,7 @@ from django.views.decorators.http import require_POST
 import hashlib, json, logging, secrets
 from urllib import parse, request as urllib_request
 from .forms import GooglePetitionSupportForm, ListeningRequestForm, PetitionSignatureForm, PublicQuestionForm, VolunteerForm
-from .models import AccountabilityEvent, AuthorityResponse, AuditLog, EvidenceDocument, ListeningRequest, Petition, PetitionSignature, PromiseTracker, PublicQuestion, Story, StoryReaction, StudentDemand, SupportResource
+from .models import AccountabilityEvent, AuthorityResponse, AuditLog, CommentReaction, CommentReport, EvidenceDocument, ListeningRequest, Petition, PetitionSignature, PromiseTracker, PublicQuestion, Story, StoryComment, StoryReaction, StudentDemand, SupportResource
 from .utils import mask_email, request_fingerprint
 
 logger = logging.getLogger(__name__)
@@ -302,7 +302,7 @@ def talk(request):
 def share(request, kind='text'):
     if kind not in {'text','audio','video'}: kind = 'text'
     if request.method == 'POST':
-        form = ListeningRequestForm(request.POST, request.FILES)
+        form = ListeningRequestForm(request.POST, request.FILES, instance=ListeningRequest(kind=kind))
         if form.is_valid():
             item = form.save(commit=False); item.kind = kind
             item.user = request.user if request.user.is_authenticated else None
@@ -313,10 +313,13 @@ def share(request, kind='text'):
             request.session['last_submission_public_review'] = item.public_sharing_consent
             return redirect('received')
         messages.error(request, 'Your message could not be sent yet, but what you wrote is still safe. You can try again.')
-    else: form = ListeningRequestForm(initial={'anonymous':True,'wants_reply':True})
+    else: form = ListeningRequestForm(instance=ListeningRequest(kind=kind), initial={'anonymous':True,'wants_reply':True})
     return render(request, f'listening/{kind}_share.html', {'form':form, 'kind':kind})
 
-def received(request): return render(request, 'listening/received.html', {'reference':request.session.get('last_submission'), 'public_review_requested':request.session.get('last_submission_public_review', False)})
+def received(request):
+    reference = request.session.get('last_submission')
+    item = ListeningRequest.objects.filter(public_id=reference).only('tracking_code').first() if reference else None
+    return render(request, 'listening/received.html', {'reference':item.tracking_code if item else None, 'public_review_requested':request.session.get('last_submission_public_review', False)})
 
 def safety(request):
     return render(request, 'support/safety.html', {'resources':SupportResource.objects.filter(verified=True)})
@@ -326,7 +329,7 @@ def stories(request):
     return render(request, 'stories/feed.html', {'stories':queryset[:12], 'featured_stories':queryset.filter(featured=True)[:3]})
 
 def public_stories():
-    return Story.objects.filter(approved=True, moderation_status='published', public_consent=True, privacy_review_complete=True, removed_at__isnull=True).annotate(reaction_count=Count('reactions', distinct=True), comment_count=Count('comments', filter=Q(comments__approved=True), distinct=True)).order_by('-featured','-published_at','-created_at')
+    return Story.objects.filter(approved=True, moderation_status='published', public_consent=True, privacy_review_complete=True, removed_at__isnull=True).annotate(reaction_count=Count('reactions', distinct=True), comment_count=Count('comments', filter=Q(comments__approved=True,comments__status='approved',comments__removed_at__isnull=True), distinct=True)).order_by('-featured','-published_at','-created_at')
 
 def story_format_page(request, story_format):
     templates={'text':'stories/text_stories.html','voice':'stories/voice_stories.html','video':'stories/video_stories.html'}
@@ -353,24 +356,90 @@ def story_topic_page(request, topic):
 def story_detail(request, slug):
     story = get_object_or_404(public_stories(), slug=slug)
     related=public_stories().filter(topic=story.topic).exclude(pk=story.pk)[:3]
-    return render(request, 'stories/detail.html', {'story':story, 'comments':story.comments.filter(approved=True), 'related_stories':related})
+    return render(request, 'stories/detail.html', {'story':story, 'comments':story.comments.filter(approved=True,status='approved',removed_at__isnull=True,parent__isnull=True).prefetch_related('replies'), 'related_stories':related})
+
+def _session_hash(request):
+    if not request.session.session_key:
+        request.session.create()
+    return hashlib.sha256((settings.SECRET_KEY + request.session.session_key).encode()).hexdigest()
+
+def _rate_limited(request, key, limit, window_seconds):
+    now=timezone.now().timestamp()
+    bucket=[stamp for stamp in request.session.get(f'rate:{key}',[]) if now-stamp < window_seconds]
+    limited=len(bucket)>=limit
+    if not limited: bucket.append(now)
+    request.session[f'rate:{key}']=bucket
+    return limited
+
+def story_comments(request, pk):
+    story=get_object_or_404(public_stories(),pk=pk)
+    comments=story.comments.filter(parent__isnull=True,approved=True,status='approved',removed_at__isnull=True).annotate(like_count=Count('reactions')).prefetch_related('replies__reactions').order_by('-created_at')
+    page=Paginator(comments,10).get_page(request.GET.get('page'))
+    def pack(c):
+        return {'id':c.pk,'name':c.display_name or 'Anonymous student','body':c.body,'created':timezone.localtime(c.created_at).strftime('%d %b %Y · %I:%M %p'),'likes':getattr(c,'like_count',c.reactions.count()),'replies':[{'id':r.pk,'name':r.display_name or 'Anonymous student','body':r.body,'created':timezone.localtime(r.created_at).strftime('%d %b %Y · %I:%M %p'),'likes':r.reactions.count()} for r in c.replies.filter(approved=True,status='approved',removed_at__isnull=True)]}
+    return JsonResponse({'ok':True,'comments':[pack(c) for c in page.object_list],'count':story.comments.filter(approved=True,status='approved',removed_at__isnull=True).count(),'has_next':page.has_next(),'comments_mode':story.comment_mode})
 
 @require_POST
 def story_comment(request, pk):
+    if _rate_limited(request,'comment',5,600): return JsonResponse({'ok':False,'message':'Please wait before sending another response.'},status=429)
     story=get_object_or_404(public_stories(),pk=pk)
     if story.comment_mode=='none': return JsonResponse({'ok':False,'message':'Comments are disabled for this story.'},status=403)
     body=request.POST.get('body','').strip()
-    if not body or len(body)>800: return JsonResponse({'ok':False,'message':'Please write a comment between 1 and 800 characters.'},status=400)
-    comment=story.comments.create(display_name=request.POST.get('display_name','').strip()[:80],body=body,approved=False)
+    if len(body)<3 or len(body)>800: return JsonResponse({'ok':False,'message':'Please write a meaningful response between 3 and 800 characters.'},status=400)
+    parent=None
+    if request.POST.get('parent'):
+        parent=get_object_or_404(StoryComment,pk=request.POST['parent'],story=story,parent__isnull=True,approved=True,status='approved',removed_at__isnull=True)
+        if parent.thread_locked: return JsonResponse({'ok':False,'message':'This thread is closed.'},status=403)
+    comment=story.comments.create(parent=parent,display_name=request.POST.get('display_name','').strip()[:80],body=body,approved=False,status='pending')
     return JsonResponse({'ok':True,'message':'Your supportive comment is waiting for moderation.','comment_id':comment.pk})
 
+@require_POST
 def react(request, pk):
-    if request.method == 'POST':
-        if not request.session.session_key: request.session.create()
-        story = get_object_or_404(public_stories(), pk=pk)
-        reaction = request.POST.get('reaction')
-        if reaction in dict(StoryReaction.REACTIONS): StoryReaction.objects.get_or_create(story=story, session_key=request.session.session_key, reaction=reaction)
+    if _rate_limited(request,'post-reaction',30,60): return JsonResponse({'ok':False,'message':'Please slow down.'},status=429)
+    story = get_object_or_404(public_stories(), pk=pk)
+    session=_session_hash(request)[:40]
+    existing=StoryReaction.objects.filter(story=story,session_key=session,reaction='with_you')
+    toggle=request.headers.get('x-requested-with')=='XMLHttpRequest' or request.POST.get('json')
+    active=not existing.exists()
+    if active: StoryReaction.objects.create(story=story,session_key=session,reaction='with_you')
+    elif toggle: existing.delete(); active=False
+    else: active=True
+    count=story.reactions.count()
+    if request.headers.get('x-requested-with')=='XMLHttpRequest' or request.POST.get('json'):
+        return JsonResponse({'ok':True,'active':active,'count':count})
     return redirect(request.POST.get('next') or 'stories')
+
+@require_POST
+def comment_react(request, pk):
+    if _rate_limited(request,'comment-reaction',30,60): return JsonResponse({'ok':False,'message':'Please slow down.'},status=429)
+    comment=get_object_or_404(StoryComment,pk=pk,approved=True,status='approved',removed_at__isnull=True)
+    token=_session_hash(request)
+    reaction,created=CommentReaction.objects.get_or_create(comment=comment,session_key_hash=token)
+    if not created: reaction.delete()
+    return JsonResponse({'ok':True,'active':created,'count':comment.reactions.count()})
+
+@require_POST
+def comment_report(request, pk):
+    if _rate_limited(request,'report',5,600): return JsonResponse({'ok':False,'message':'Please wait before sending another report.'},status=429)
+    comment=get_object_or_404(StoryComment,pk=pk,approved=True,status='approved',removed_at__isnull=True)
+    reason=request.POST.get('reason')
+    if reason not in dict(CommentReport.REASONS): return JsonResponse({'ok':False,'message':'Choose a report reason.'},status=400)
+    _,created=CommentReport.objects.get_or_create(comment=comment,session_key_hash=_session_hash(request),defaults={'reason':reason,'details':request.POST.get('details','')[:500]})
+    return JsonResponse({'ok':True,'message':'Thank you. Staff will review this response.','created':created})
+
+@require_POST
+def withdraw_consent(request):
+    if _rate_limited(request,'tracking',5,900): return JsonResponse({'ok':False,'message':'Too many tracking-code attempts. Please try later.'},status=429)
+    code=request.POST.get('tracking_code','').strip().upper()
+    item=get_object_or_404(ListeningRequest,tracking_code=code)
+    item.public_sharing_consent=False
+    item.public_consent_withdrawn_at=timezone.now()
+    if item.published_story:
+        item.published_story.removed_at=timezone.now()
+        item.published_story.save(update_fields=('removed_at','updated_at'))
+    item.save(update_fields=('public_sharing_consent','public_consent_withdrawn_at','updated_at'))
+    AuditLog.objects.create(action='Public-sharing consent withdrawn by tracking code',object_reference=f'ListeningRequest:{item.pk}')
+    return JsonResponse({'ok':True,'message':'Public-sharing consent has been withdrawn.'})
 
 def volunteer(request):
     form = VolunteerForm(request.POST or None)

@@ -6,13 +6,28 @@ class ListeningRequestForm(forms.ModelForm):
     public_sharing_consent = forms.BooleanField(required=False, label='You may review this for anonymous public sharing. Nothing is published until staff approval and a privacy review.')
     class Meta:
         model = ListeningRequest
-        fields = ['message','media','anonymous','wants_reply','support_preference','public_sharing_consent']
-        widgets = {'message': forms.Textarea(attrs={'placeholder':'Write whatever is on your mind…','rows':9}), 'support_preference': forms.RadioSelect}
+        fields = ['title','message','media','category','anonymous','wants_reply','support_preference','comment_preference','public_sharing_consent']
+        widgets = {'message': forms.Textarea(attrs={'placeholder':'Write whatever is on your mind…','rows':9,'maxlength':'5000'}), 'support_preference': forms.RadioSelect, 'comment_preference': forms.RadioSelect}
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['comment_preference'].required = False
+        self.fields['comment_preference'].initial = 'support'
     def clean_media(self):
         file = self.cleaned_data.get('media')
         if file and file.size > 25 * 1024 * 1024:
             raise forms.ValidationError('Please choose a file smaller than 25 MB.')
         return file
+    def clean(self):
+        cleaned = super().clean()
+        cleaned['comment_preference'] = cleaned.get('comment_preference') or 'support'
+        media = cleaned.get('media')
+        if media:
+            kind = getattr(self.instance, 'kind', '') or self.data.get('kind', '')
+            ext = media.name.rsplit('.', 1)[-1].lower() if '.' in media.name else ''
+            allowed = {'audio': {'mp3','m4a','wav','ogg','webm'}, 'video': {'webm','mp4','mov'}}
+            if kind in allowed and ext not in allowed[kind]:
+                self.add_error('media', 'This file format is not supported.')
+        return cleaned
 
 class VolunteerForm(forms.ModelForm):
     class Meta:
