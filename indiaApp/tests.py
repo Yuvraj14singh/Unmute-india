@@ -1,12 +1,14 @@
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from unittest.mock import patch
 from pathlib import Path
+import tempfile
 from .forms import GooglePetitionSupportForm
-from .models import CommentReaction, CommentReport, ListeningRequest, Petition, PetitionSignature, PublicQuestion, Story, StoryComment
+from .models import AuditLog, CommentReaction, CommentReport, ListeningRequest, Petition, PetitionSignature, PublicQuestion, Story, StoryComment
 from .utils import compact_count
 
 class PublicPageTests(TestCase):
@@ -284,5 +286,82 @@ class UnmutedVoicesUpgradeTests(TestCase):
         self.assertIsNotNone(self.story.removed_at)
         self.assertFalse(item.public_sharing_consent)
         self.assertTrue(ListeningRequest.objects.filter(pk=item.pk).exists())
+
+class AdminPublicationWorkspaceTests(TestCase):
+    def setUp(self):
+        self.media_dir=tempfile.TemporaryDirectory()
+        self.media_override=override_settings(MEDIA_ROOT=self.media_dir.name)
+        self.media_override.enable()
+        self.staff=get_user_model().objects.create_superuser('workspace-admin','workspace@example.com','safe-password')
+        self.client.force_login(self.staff)
+    def tearDown(self):
+        self.media_override.disable()
+        self.media_dir.cleanup()
+        super().tearDown()
+
+    def request(self,kind='text',consent=True,**kwargs):
+        defaults={'kind':kind,'message':'A reviewed public message.','public_sharing_consent':consent,'privacy_review_complete':True,'publication_status':'review'}
+        defaults.update(kwargs)
+        return ListeningRequest.objects.create(**defaults)
+
+    def test_changelist_search_filter_and_summary_load(self):
+        self.request(title='Find this request')
+        url=reverse('admin:indiaApp_listeningrequest_changelist')
+        response=self.client.get(url,{'q':'Find this','kind':'text'})
+        self.assertEqual(response.status_code,200)
+        self.assertContains(response,'Listening Requests')
+        self.assertContains(response,'Public review requested')
+
+    def test_preview_is_public_safe(self):
+        item=self.request()
+        response=self.client.get(reverse('admin:indiaApp_listeningrequest_preview',args=[item.pk]))
+        self.assertContains(response,'A reviewed public message.')
+        self.assertNotContains(response,item.tracking_code)
+        self.assertNotContains(response,'moderation_notes')
+
+    def test_private_submission_cannot_publish_without_consent(self):
+        item=self.request(consent=False,publication_status='private')
+        response=self.client.post(reverse('admin:indiaApp_listeningrequest_publish',args=[item.pk]),follow=True)
+        self.assertEqual(response.status_code,200)
+        item.refresh_from_db()
+        self.assertIsNone(item.published_story_id)
+
+    def test_text_audio_and_video_map_to_public_formats(self):
+        items=[
+            self.request(kind='text'),
+            self.request(kind='audio',message='',media=SimpleUploadedFile('voice.webm',b'audio-bytes',content_type='audio/webm')),
+            self.request(kind='video',message='',media=SimpleUploadedFile('video.webm',b'video-bytes',content_type='video/webm')),
+        ]
+        for item in items:
+            self.client.post(reverse('admin:indiaApp_listeningrequest_publish',args=[item.pk]))
+            item.refresh_from_db()
+        self.assertEqual([item.published_story.story_format for item in items],['text','voice','video'])
+        self.assertContains(self.client.get(reverse('voices_text')),'A reviewed public message.')
+        self.assertEqual(Story.objects.count(),3)
+
+    def test_repeated_publish_is_idempotent_and_audited(self):
+        item=self.request()
+        url=reverse('admin:indiaApp_listeningrequest_publish',args=[item.pk])
+        self.client.post(url); self.client.post(url)
+        item.refresh_from_db()
+        self.assertEqual(Story.objects.count(),1)
+        self.assertIsNotNone(item.published_story_id)
+        self.assertTrue(AuditLog.objects.filter(actor=self.staff,object_reference__contains=f'ListeningRequest:{item.pk}').exists())
+
+    def test_unpublish_hides_public_post_and_preserves_private_source(self):
+        item=self.request()
+        self.client.post(reverse('admin:indiaApp_listeningrequest_publish',args=[item.pk]))
+        story=item.__class__.objects.get(pk=item.pk).published_story
+        self.client.post(reverse('admin:indiaApp_listeningrequest_unpublish',args=[item.pk]),{'reason':'Privacy request'})
+        item.refresh_from_db(); story.refresh_from_db()
+        self.assertEqual(item.publication_status,'removed')
+        self.assertIsNotNone(story.removed_at)
+        self.assertTrue(ListeningRequest.objects.filter(pk=item.pk).exists())
+        self.assertNotContains(self.client.get(reverse('voices_text')),'A reviewed public message.')
+
+    def test_non_staff_cannot_use_publication_actions(self):
+        self.client.logout()
+        response=self.client.post(reverse('admin:indiaApp_listeningrequest_publish',args=[self.request().pk]))
+        self.assertEqual(response.status_code,302)
 
 # Create your tests here.

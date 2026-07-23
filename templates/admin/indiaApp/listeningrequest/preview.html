@@ -1,0 +1,15 @@
+{% extends "admin/base_site.html" %}{% load i18n static %}
+{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Home</a> › <a href="{% url 'admin:indiaApp_listeningrequest_changelist' %}">Listening Requests</a> › Public preview</div>{% endblock %}
+{% block content %}<div class="workspace-heading"><p class="workspace-eyebrow">SAFE PUBLIC PREVIEW</p><h1>Public card preview</h1><p>Only public-facing fields are shown. Tracking codes and internal notes are excluded.</p></div>
+<article class="admin-public-preview">
+  <header><span>{{ item.get_kind_display }}</span><span>✓ Moderated preview</span></header>
+  <small>{{ item.created_at|date:"d M Y · h:i A" }}</small>
+  <h2>{{ item.title|default:"What someone needed to say" }}</h2>
+  {% if item.kind == 'text' %}<div class="preview-copy">{{ item.message|linebreaks }}</div>
+  {% elif item.kind == 'audio' and item.media %}<audio controls preload="metadata" src="{{ item.media.url }}"></audio>
+  {% elif item.kind == 'video' and item.media %}<video controls playsinline preload="metadata" src="{{ item.media.url }}"></video>
+  {% else %}<p class="errornote">No valid public content is attached.</p>{% endif %}
+  <footer><span>{{ item.comment_preference|capfirst }}</span><span>{{ item.anonymous|yesno:"Anonymous student,Student" }}</span></footer>
+</article>
+<div class="preview-actions"><a class="button" href="{% url 'admin:indiaApp_listeningrequest_change' item.pk %}">Return to review</a>{% if item.publication_status == 'published' %}<a class="button danger" href="{% url 'admin:indiaApp_listeningrequest_unpublish' item.pk %}">Unpublish</a>{% elif item.public_sharing_consent and item.privacy_review_complete and not item.safety_flag %}<a class="button default" href="{% url 'admin:indiaApp_listeningrequest_publish' item.pk %}">Approve &amp; publish</a>{% endif %}</div>
+{% endblock %}

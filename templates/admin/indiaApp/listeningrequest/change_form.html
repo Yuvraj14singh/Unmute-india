@@ -1,0 +1,14 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls %}
+{% block content_title %}<div class="workspace-heading"><p class="workspace-eyebrow">LISTENING DESK · PROTECTED RECORD</p><h1>Review Listening Request</h1><p>Review the private submission, complete the privacy check, and choose a deliberate publication action.</p></div>{% endblock %}
+{% block object-tools-items %}
+{% if original %}
+<li><a href="{% url 'admin:indiaApp_listeningrequest_preview' original.pk %}">Preview public card</a></li>
+{% if original.publication_status == 'published' %}<li><a class="unpublish-link" href="{% url 'admin:indiaApp_listeningrequest_unpublish' original.pk %}">Unpublish</a></li>
+{% elif original.public_sharing_consent and original.privacy_review_complete and not original.safety_flag %}<li><a class="publish-link" href="{% url 'admin:indiaApp_listeningrequest_publish' original.pk %}">Approve &amp; publish</a></li>{% endif %}
+{% endif %}
+{{ block.super }}
+{% endblock %}
+{% block after_field_sets %}
+{% if original %}<section class="audit-summary"><h2>Audit trail</h2><dl><div><dt>Created</dt><dd>{{ original.created_at }}</dd></div><div><dt>Reviewed</dt><dd>{{ original.reviewed_at|default:"Not reviewed" }}</dd></div><div><dt>Reviewed by</dt><dd>{{ original.reviewed_by|default:"Not assigned" }}</dd></div><div><dt>Publication</dt><dd>{{ original.get_publication_status_display }}</dd></div></dl></section>{% endif %}
+{% endblock %}

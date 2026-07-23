@@ -37,7 +37,7 @@ class ListeningRequest(TimeStampedModel):
     TYPES = [('text','Text'),('audio','Audio'),('video','Video')]
     NEEDS = [('listen','Just listen'),('reply','Send a supportive reply'),('think','Help me think through this'),('trusted','Help me talk to someone I trust'),('unsure','I am not sure')]
     STATUS = [('new','New'),('assigned','Assigned'),('active','Active'),('closed','Closed')]
-    PUBLICATION_STATUS = [('private','Private — not submitted for publication'),('review','Public sharing review requested'),('published','Approved and published'),('rejected','Public sharing declined')]
+    PUBLICATION_STATUS = [('private','Private — not submitted for publication'),('review','Public sharing review requested'),('published','Approved and published'),('rejected','Public sharing declined'),('removed','Unpublished by staff')]
     CATEGORIES = [('unsaid','Something I cannot tell anyone'),('exam','Exam pressure'),('family','Family pressure'),('college','College or coaching pressure'),('confession','Personal confession'),('protest','Protest or accountability experience'),('message','A message for other students'),('hope','Hope or recovery'),('other','Other')]
     public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)

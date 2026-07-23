@@ -1,0 +1,10 @@
+{% extends "admin/change_list.html" %}
+{% load i18n admin_urls static %}
+{% block content_title %}
+<div class="workspace-heading"><div><p class="workspace-eyebrow">LISTENING DESK</p><h1>Listening Requests</h1><p>{{ workspace_subtitle }}</p></div></div>
+{% if summary_counts %}<div class="summary-chips" aria-label="Listening request summary">
+  <span><b>{{ summary_counts.total }}</b>Total</span><span><b>{{ summary_counts.new }}</b>New</span><span><b>{{ summary_counts.active }}</b>Active</span>
+  <span><b>{{ summary_counts.text }}</b>Text</span><span><b>{{ summary_counts.audio }}</b>Audio</span><span><b>{{ summary_counts.video }}</b>Video</span>
+  <span><b>{{ summary_counts.review }}</b>Public review requested</span><span><b>{{ summary_counts.published }}</b>Published</span><span class="summary-danger"><b>{{ summary_counts.flagged }}</b>Safety flagged</span>
+</div>{% endif %}
+{% endblock %}

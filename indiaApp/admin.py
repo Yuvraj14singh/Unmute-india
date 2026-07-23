@@ -1,65 +1,142 @@
 from django.contrib import admin
 from django.contrib import messages
+from django.contrib.admin.views.decorators import staff_member_required
 from django.core.files.base import ContentFile
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
+from django.http import HttpResponseRedirect
+from django.shortcuts import get_object_or_404, render
+from django.urls import path, reverse
+from django.utils.html import format_html
 from django.utils import timezone
 from django.utils.text import slugify
 from .models import *
 
 @admin.register(ListeningRequest)
 class ListeningRequestAdmin(admin.ModelAdmin):
-    list_display=('public_id','kind','status','publication_status','public_sharing_consent','published_story','safety_flag','assigned_to','created_at')
+    change_list_template='admin/indiaApp/listeningrequest/change_list.html'
+    change_form_template='admin/indiaApp/listeningrequest/change_form.html'
+    list_display=('submission_summary','format_badge','status_badge','public_sharing_badge','publication_badge','safety_badge','assigned_to','created_at','row_actions')
     list_filter=('kind','status','publication_status','public_sharing_consent','anonymous','safety_flag')
-    search_fields=('public_id','message')
+    search_fields=('public_id','title','message')
     readonly_fields=('public_id','tracking_code','privacy','public_sharing_consent','publication_status','published_story','reviewed_by','reviewed_at','consent_at','public_consent_withdrawn_at','created_at','updated_at')
-    list_editable=('status','assigned_to')
     date_hierarchy='created_at'
     ordering=('-safety_flag','-created_at')
     list_per_page=30
-    actions=('approve_and_publish','decline_publication')
+    actions=('approve_and_publish','mark_private_only','decline_publication','unpublish_selected','assign_to_me','mark_under_review')
     fieldsets=(
-        ('Private submission', {'fields':('public_id','tracking_code','kind','title','category','message','media','anonymous','wants_reply','support_preference','privacy','status','assigned_to','safety_flag')}),
-        ('Public sharing decision', {'fields':('public_sharing_consent','public_consent_withdrawn_at','comment_preference','privacy_review_complete','publication_status','published_story','reviewed_by','reviewed_at','moderation_notes'), 'description':'Only submissions with explicit public-sharing consent may be published. Review and remove personal details before approval.'}),
-        ('Record', {'fields':('consent_at','created_at','updated_at')}),
+        ('Submission overview', {'fields':('public_id','kind','created_at','status','assigned_to')}),
+        ('Private submission', {'fields':('title','category','message','media','anonymous','wants_reply','support_preference','privacy','consent_at')}),
+        ('Public sharing review', {'fields':('public_sharing_consent','public_consent_withdrawn_at','comment_preference','privacy_review_complete','safety_flag','publication_status','published_story','reviewed_by','reviewed_at','moderation_notes'), 'description':'Only submissions with explicit public-sharing consent may be published. Review and remove personal details before approval.'}),
+        ('Record', {'fields':('updated_at',)}),
     )
+
+    def get_urls(self):
+        urls=super().get_urls()
+        custom=[
+            path('<path:object_id>/preview/',self.admin_site.admin_view(self.preview_view),name='indiaApp_listeningrequest_preview'),
+            path('<path:object_id>/publish/',self.admin_site.admin_view(self.publish_view),name='indiaApp_listeningrequest_publish'),
+            path('<path:object_id>/unpublish/',self.admin_site.admin_view(self.unpublish_view),name='indiaApp_listeningrequest_unpublish'),
+        ]
+        return custom+urls
+
+    def changelist_view(self,request,extra_context=None):
+        qs=self.get_queryset(request)
+        counts={
+            'total':qs.count(),'new':qs.filter(status='new').count(),
+            'active':qs.filter(status__in=('assigned','active')).count(),
+            'text':qs.filter(kind='text').count(),'audio':qs.filter(kind='audio').count(),
+            'video':qs.filter(kind='video').count(),
+            'review':qs.filter(publication_status='review').count(),
+            'published':qs.filter(publication_status='published').count(),
+            'flagged':qs.filter(safety_flag=True).count(),
+        }
+        return super().changelist_view(request,{**(extra_context or {}),'workspace_subtitle':'Review private submissions, reply safely and approve consented public voices.','summary_counts':counts})
+
+    @admin.display(description='Submission',ordering='public_id')
+    def submission_summary(self,obj):
+        excerpt=obj.title or ' '.join(obj.message.split())[:64] or f'{obj.get_kind_display()} submission'
+        return format_html('<strong class="submission-id">#{}</strong><span class="submission-excerpt">{}</span><small>{}</small>',str(obj.public_id)[:8],excerpt,'Anonymous' if obj.anonymous else 'Identity protected')
+    @admin.display(description='Format',ordering='kind')
+    def format_badge(self,obj): return format_html('<span class="admin-badge format-{}">{}</span>',obj.kind,obj.get_kind_display())
+    @admin.display(description='Status',ordering='status')
+    def status_badge(self,obj): return format_html('<span class="admin-badge status-{}">{}</span>',obj.status,obj.get_status_display())
+    @admin.display(description='Public sharing',ordering='public_sharing_consent')
+    def public_sharing_badge(self,obj):
+        label='Approved' if obj.publication_status=='published' else ('Review requested' if obj.public_sharing_consent else 'No consent')
+        return format_html('<span class="admin-badge consent-{}">{}</span>','yes' if obj.public_sharing_consent else 'no',label)
+    @admin.display(description='Publication',ordering='publication_status')
+    def publication_badge(self,obj):
+        if obj.published_story_id and obj.publication_status=='published':
+            return format_html('<a class="admin-badge publication-published" href="{}">View public post</a>',reverse('story_detail',args=[obj.published_story.slug]))
+        return format_html('<span class="admin-badge publication-{}">{}</span>',obj.publication_status,obj.get_publication_status_display())
+    @admin.display(description='Safety',ordering='safety_flag')
+    def safety_badge(self,obj): return format_html('<span class="admin-badge safety-{}">{}</span>','flagged' if obj.safety_flag else 'clear','Flagged' if obj.safety_flag else 'Clear')
+    @admin.display(description='Actions')
+    def row_actions(self,obj):
+        review=reverse('admin:indiaApp_listeningrequest_change',args=[obj.pk])
+        preview=reverse('admin:indiaApp_listeningrequest_preview',args=[obj.pk])
+        controls=[format_html('<a class="row-action" href="{}">Review</a>',review),format_html('<a class="row-action" href="{}">Preview</a>',preview)]
+        if obj.publication_status=='published':
+            controls.append(format_html('<a class="row-action danger" href="{}">Unpublish</a>',reverse('admin:indiaApp_listeningrequest_unpublish',args=[obj.pk])))
+        elif obj.public_sharing_consent and obj.privacy_review_complete and not obj.safety_flag:
+            controls.append(format_html('<a class="row-action publish" href="{}">Publish</a>',reverse('admin:indiaApp_listeningrequest_publish',args=[obj.pk])))
+        return format_html('<div class="row-actions">{}</div>',format_html(''.join(str(x) for x in controls)))
+
+    def _eligible(self,item):
+        valid_content=bool(item.message.strip()) if item.kind=='text' else bool(item.media)
+        return item.public_sharing_consent and item.privacy_review_complete and not item.safety_flag and valid_content
+
+    def _publish(self,request,item):
+        if not self.has_change_permission(request,item) or not self._eligible(item): return False,'Consent, safety or content requirements are not complete.'
+        previous=item.publication_status
+        with transaction.atomic():
+            story=item.published_story or Story()
+            excerpt=' '.join(item.message.split())[:72]
+            story.title=item.title or story.title or excerpt or f'Anonymous {item.get_kind_display()} message'
+            story.slug=story.slug or f"{slugify(story.title)[:48]}-{item.public_id.hex[:8]}"
+            story.body=item.message.strip() or f'An anonymous student shared this {item.get_kind_display().lower()} message.'
+            story.display_name='Anonymous Student' if item.anonymous else 'Student'
+            story.story_format={'audio':'voice','video':'video'}.get(item.kind,'text')
+            story.comment_mode=item.comment_preference
+            story.approved=True; story.moderation_status='published'; story.public_consent=True
+            story.privacy_review_complete=True; story.removed_at=None; story.published_at=story.published_at or timezone.now()
+            story.save()
+            if item.media and not story.public_media:
+                item.media.open('rb')
+                story.public_media.save(item.media.name.rsplit('/',1)[-1],ContentFile(item.media.read()),save=True)
+                item.media.close()
+            item.privacy_review_complete=True; item.publication_status='published'; item.published_story=story
+            item.reviewed_by=request.user; item.reviewed_at=timezone.now()
+            item.save(update_fields=('privacy_review_complete','publication_status','published_story','reviewed_by','reviewed_at','updated_at'))
+            AuditLog.objects.create(actor=request.user,action=f'Published ListeningRequest ({previous} → published)',object_reference=f'ListeningRequest:{item.pk}:Story:{story.pk}')
+        return True,'Published in Unmuted Voices.'
+
+    def _unpublish(self,request,item,reason='Staff moderation decision'):
+        if not self.has_change_permission(request,item) or not item.published_story_id: return False
+        previous=item.publication_status
+        with transaction.atomic():
+            story=item.published_story
+            story.removed_at=timezone.now(); story.moderation_status='archived'; story.approved=False
+            story.save(update_fields=('removed_at','moderation_status','approved','updated_at'))
+            item.publication_status='removed'; item.reviewed_by=request.user; item.reviewed_at=timezone.now()
+            item.save(update_fields=('publication_status','reviewed_by','reviewed_at','updated_at'))
+            AuditLog.objects.create(actor=request.user,action=f'Unpublished ListeningRequest ({previous} → removed): {reason[:60]}',object_reference=f'ListeningRequest:{item.pk}:Story:{story.pk}')
+        return True
 
     @admin.action(description='Approve & publish selected consented submissions')
     def approve_and_publish(self, request, queryset):
-        published = skipped = failed = 0
+        published=skipped=failed=0
         for item in queryset.select_related('published_story'):
-            if not item.public_sharing_consent or item.publication_status != 'review':
-                skipped += 1
-                continue
             try:
-                with transaction.atomic():
-                    story = item.published_story or Story()
-                    excerpt = ' '.join(item.message.split())[:72]
-                    story.title = story.title or item.title or (excerpt if excerpt else f'Anonymous {item.get_kind_display()} message')
-                    story.slug = story.slug or f"{slugify(story.title)[:48]}-{item.public_id.hex[:8]}"
-                    story.body = item.message.strip() or f'An anonymous student shared this {item.get_kind_display().lower()} story.'
-                    story.display_name = 'Anonymous Student'
-                    story.story_format = {'audio':'voice','video':'video'}.get(item.kind, 'text')
-                    story.topic = story.topic or 'heard'
-                    story.approved = True
-                    story.moderation_status = 'published'
-                    story.public_consent = True
-                    story.privacy_review_complete = True
-                    story.comment_mode = item.comment_preference
-                    story.published_at = story.published_at or timezone.now()
-                    story.save()
-                    if item.media and not story.public_media:
-                        item.media.open('rb')
-                        story.public_media.save(item.media.name.rsplit('/', 1)[-1], ContentFile(item.media.read()), save=True)
-                        item.media.close()
-                    item.publication_status = 'published'
-                    item.published_story = story
-                    item.reviewed_by = request.user
-                    item.reviewed_at = timezone.now()
-                    item.save(update_fields=('publication_status','published_story','reviewed_by','reviewed_at','updated_at'))
-                    AuditLog.objects.create(actor=request.user, action='Approved private submission for public story', object_reference=f'ListeningRequest:{item.pk}:Story:{story.pk}')
-                    published += 1
-            except Exception:
-                failed += 1
+                # Choosing this explicit approval action completes the staff privacy review.
+                if item.public_sharing_consent and not item.safety_flag:
+                    item.privacy_review_complete=True
+                    item.save(update_fields=('privacy_review_complete','updated_at'))
+                ok,_=self._publish(request,item)
+                if ok: published+=1
+                else: skipped+=1
+            except Exception: failed+=1
         if published:
             self.message_user(request, f'{published} submission(s) approved and published in Unmuted Voices.', messages.SUCCESS)
         if skipped:
@@ -69,11 +146,52 @@ class ListeningRequestAdmin(admin.ModelAdmin):
 
     @admin.action(description='Decline public publication for selected submissions')
     def decline_publication(self, request, queryset):
-        eligible = queryset.filter(publication_status='review', published_story__isnull=True)
-        count = eligible.update(publication_status='rejected', reviewed_by=request.user, reviewed_at=timezone.now())
+        eligible=queryset.exclude(publication_status='published')
+        count=eligible.update(publication_status='rejected',reviewed_by=request.user,reviewed_at=timezone.now())
         if count:
             AuditLog.objects.create(actor=request.user, action=f'Declined {count} public sharing request(s)', object_reference='ListeningRequest bulk action')
         self.message_user(request, f'{count} public sharing request(s) declined; their private support records remain protected.', messages.SUCCESS)
+
+    @admin.action(description='Mark selected private-only')
+    def mark_private_only(self,request,queryset):
+        eligible=queryset.exclude(publication_status='published'); count=eligible.update(publication_status='private',reviewed_by=request.user,reviewed_at=timezone.now())
+        AuditLog.objects.create(actor=request.user,action=f'Marked {count} ListeningRequests private-only',object_reference='ListeningRequest bulk action')
+        self.message_user(request,f'{count} submission(s) kept private.',messages.SUCCESS)
+    @admin.action(description='Unpublish selected')
+    def unpublish_selected(self,request,queryset):
+        count=sum(1 for item in queryset.select_related('published_story') if self._unpublish(request,item))
+        self.message_user(request,f'{count} public voice(s) unpublished; private originals were preserved.',messages.SUCCESS)
+    @admin.action(description='Mark selected under review')
+    def mark_under_review(self,request,queryset):
+        count=queryset.exclude(publication_status='published').update(status='active',publication_status='review',reviewed_by=request.user,reviewed_at=timezone.now())
+        AuditLog.objects.create(actor=request.user,action=f'Marked {count} ListeningRequests under review',object_reference='ListeningRequest bulk action')
+        self.message_user(request,f'{count} submission(s) marked under review.',messages.SUCCESS)
+    @admin.action(description='Assign selected to my listener profile')
+    def assign_to_me(self,request,queryset):
+        profile=ListenerProfile.objects.filter(user=request.user).first()
+        if not profile:
+            self.message_user(request,'Create a Listener Profile for this staff account before assigning requests.',messages.ERROR)
+            return
+        count=queryset.update(assigned_to=profile,status='assigned')
+        AuditLog.objects.create(actor=request.user,action=f'Assigned {count} ListeningRequests to listener',object_reference=f'ListenerProfile:{profile.pk}')
+        self.message_user(request,f'{count} submission(s) assigned to {profile.display_name}.',messages.SUCCESS)
+
+    def preview_view(self,request,object_id):
+        item=get_object_or_404(ListeningRequest,pk=object_id)
+        if not self.has_view_permission(request,item): raise PermissionDenied
+        return render(request,'admin/indiaApp/listeningrequest/preview.html',{'item':item,'title':'Public preview','opts':self.model._meta})
+    def publish_view(self,request,object_id):
+        item=get_object_or_404(ListeningRequest,pk=object_id)
+        if request.method=='POST':
+            ok,message=self._publish(request,item); self.message_user(request,message,messages.SUCCESS if ok else messages.ERROR)
+            return HttpResponseRedirect(reverse('admin:indiaApp_listeningrequest_change',args=[item.pk]))
+        return render(request,'admin/indiaApp/listeningrequest/confirm_action.html',{'item':item,'action_name':'Publish','prompt':'Approve this submission for public sharing?','warning':'This creates or restores one public Unmuted Voices post after privacy review.','opts':self.model._meta})
+    def unpublish_view(self,request,object_id):
+        item=get_object_or_404(ListeningRequest,pk=object_id)
+        if request.method=='POST':
+            ok=self._unpublish(request,item,request.POST.get('reason','')); self.message_user(request,'Public post unpublished; private submission preserved.' if ok else 'This item could not be unpublished.',messages.SUCCESS if ok else messages.ERROR)
+            return HttpResponseRedirect(reverse('admin:indiaApp_listeningrequest_change',args=[item.pk]))
+        return render(request,'admin/indiaApp/listeningrequest/confirm_action.html',{'item':item,'action_name':'Unpublish','prompt':'Remove this voice from public view?','warning':'The original private submission and audit history will remain stored.','require_reason':True,'opts':self.model._meta})
 
 @admin.register(Petition)
 class PetitionAdmin(admin.ModelAdmin):
