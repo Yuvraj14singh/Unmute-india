@@ -412,3 +412,12 @@
   .space-audio__mute { width: 40px; height: 40px; }
   .space-pagination { flex-wrap: wrap; }
 }
+.space-media-missing {
+  margin: 1rem 0 0;
+  padding: .9rem 1rem;
+  border: 1px solid color-mix(in srgb, #ff7a1a 42%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, #ff7a1a 10%, transparent);
+  color: var(--text);
+  line-height: 1.5;
+}

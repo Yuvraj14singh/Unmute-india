@@ -29,6 +29,18 @@ services:
         sync: false
       - key: TURNSTILE_SECRET_KEY
         sync: false
+      # Durable S3-compatible media storage. Required because Render's free
+      # filesystem is erased during restarts and deploys.
+      - key: AWS_STORAGE_BUCKET_NAME
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_S3_ENDPOINT_URL
+        sync: false
+      - key: AWS_S3_REGION_NAME
+        sync: false
       - key: EMAIL_BACKEND
         value: django.core.mail.backends.smtp.EmailBackend
       - key: EMAIL_HOST

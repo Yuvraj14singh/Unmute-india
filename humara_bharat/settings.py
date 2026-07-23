@@ -199,9 +199,37 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = Path(os.environ.get('STATIC_ROOT', BASE_DIR / 'staticfiles'))
+MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = '/media/'
+
+# User uploads must not live on Render's ephemeral filesystem. Supplying these
+# variables switches every FileField to durable S3-compatible storage (AWS S3,
+# Cloudflare R2, Backblaze, etc.). Local development intentionally keeps using
+# MEDIA_ROOT.
+MEDIA_STORAGE_BUCKET = os.environ.get('AWS_STORAGE_BUCKET_NAME', '').strip()
+MEDIA_IS_REMOTE = bool(MEDIA_STORAGE_BUCKET)
+if MEDIA_IS_REMOTE:
+    media_options = {
+        'bucket_name': MEDIA_STORAGE_BUCKET,
+        'access_key': os.environ.get('AWS_ACCESS_KEY_ID'),
+        'secret_key': os.environ.get('AWS_SECRET_ACCESS_KEY'),
+        'region_name': os.environ.get('AWS_S3_REGION_NAME') or None,
+        'endpoint_url': os.environ.get('AWS_S3_ENDPOINT_URL') or None,
+        'default_acl': None,
+        'file_overwrite': False,
+        'querystring_auth': True,
+        'querystring_expire': 3600,
+    }
+    media_options = {key: value for key, value in media_options.items() if value is not None}
+
 STORAGES = {
     'default': {
-        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        'BACKEND': (
+            'storages.backends.s3.S3Storage'
+            if MEDIA_IS_REMOTE
+            else 'django.core.files.storage.FileSystemStorage'
+        ),
+        **({'OPTIONS': media_options} if MEDIA_IS_REMOTE else {}),
     },
     'staticfiles': {
         'BACKEND': (
@@ -211,8 +239,12 @@ STORAGES = {
         ),
     },
 }
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+if os.environ.get('RENDER') and not MEDIA_IS_REMOTE:
+    warnings.warn(
+        'Durable media storage is not configured. Render can erase uploaded '
+        'audio/video files after a restart. Set the AWS_* media variables.',
+        RuntimeWarning,
+    )
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'home'
 FILE_UPLOAD_PERMISSIONS = 0o640

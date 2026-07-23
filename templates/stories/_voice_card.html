@@ -8,17 +8,21 @@
     {% if story.story_format == 'text' %}
       <p>{{ story.body|truncatewords:32 }}</p>
     {% elif story.story_format == 'voice' and story.public_media %}
-      <audio controls preload="metadata" src="{{ story.public_media.url }}"></audio>
+      <audio controls preload="metadata" src="{{ story.public_media.url }}" data-guarded-media></audio>
+      <p class="story-media-missing" data-media-error hidden>This audio is no longer available.</p>
     {% elif story.story_format == 'video' and story.public_media %}
       <div class="video-card-player" data-video-player>
-        <video preload="metadata" playsinline muted src="{{ story.public_media.url }}"{% if story.thumbnail %} poster="{{ story.thumbnail.url }}"{% endif %}></video>
+        <video preload="metadata" playsinline muted src="{{ story.public_media.url }}" data-guarded-media{% if story.thumbnail %} poster="{{ story.thumbnail.url }}"{% endif %}></video>
         <div class="video-card-shade"></div>
         <button class="video-play" type="button" aria-label="Play video">▶</button>
         <button class="video-mute" type="button" aria-label="Unmute video" aria-pressed="true"><span aria-hidden="true">⌁</span><b>Muted</b></button>
         <div class="video-progress" aria-hidden="true"><i></i></div><span class="video-time">00:00</span>
       </div>
-    {% else %}
+      <p class="story-media-missing" data-media-error hidden>This video is no longer available.</p>
+    {% elif story.story_format == 'text' %}
       <p>{{ story.body|truncatewords:32 }}</p>
+    {% else %}
+      <p class="story-media-missing">This media is temporarily unavailable.</p>
     {% endif %}
   </div>
   <div class="story-card__footer">

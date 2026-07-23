@@ -2,6 +2,14 @@
   const csrf=()=>document.querySelector('[name=csrfmiddlewaretoken]')?.value||'';
   const esc=value=>{const node=document.createElement('div');node.textContent=value||'';return node.innerHTML};
   const formatTime=value=>{const seconds=Math.max(0,Math.floor(value||0));return `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`};
+  document.querySelectorAll('[data-guarded-media]').forEach(media=>{
+    media.addEventListener('error',()=>{
+      const player=media.closest('[data-video-player]');
+      (player||media).hidden=true;
+      const fallback=(player||media).nextElementSibling;
+      if(fallback?.matches('[data-media-error]'))fallback.hidden=false;
+    });
+  });
   const applyReactionState=(button,active,count)=>{
     button.classList.toggle('is-active',active);button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));
     const icon=button.querySelector('.reaction-icon'),value=button.querySelector('.reaction-count');if(icon)icon.textContent=active?'♥':'♡';if(value)value.textContent=count;

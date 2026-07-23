@@ -96,6 +96,15 @@ class ListeningRequest(TimeStampedModel):
     def __str__(self):
         return self.title.strip() or f'{self.get_kind_display()} submission'
 
+    @property
+    def media_available(self):
+        if not self.media or not self.media.name:
+            return False
+        try:
+            return self.media.storage.exists(self.media.name)
+        except Exception:
+            return False
+
     def save(self, *args, **kwargs):
         if not self.tracking_code:
             while True:
@@ -193,6 +202,14 @@ class Story(TimeStampedModel):
     def __str__(self): return self.title or f'{self.get_story_format_display()} story #{self.pk}'
     @property
     def is_public(self): return self.approved and self.moderation_status == 'published' and self.public_consent and self.privacy_review_complete and not self.removed_at
+    @property
+    def media_available(self):
+        if not self.public_media or not self.public_media.name:
+            return False
+        try:
+            return self.public_media.storage.exists(self.public_media.name)
+        except Exception:
+            return False
 
 class StoryReaction(TimeStampedModel):
     REACTIONS = [('with_you','I am with you'),('not_alone','You are not alone'),('listening','I am listening'),('valid','Your feelings are valid'),('strength','Sending strength'),('attention','This needs attention')]

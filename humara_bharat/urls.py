@@ -26,11 +26,11 @@ urlpatterns = [
     path('', include('indiaApp.urls')),
 ]
 
-if settings.DEBUG:
+if settings.DEBUG and not settings.MEDIA_IS_REMOTE:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-else:
-    # Render's default filesystem is ephemeral. This keeps repository-provided
-    # campaign media available; use object storage for permanent user uploads.
+elif not settings.MEDIA_IS_REMOTE:
+    # Compatibility fallback for existing local files. Production uploads
+    # should use the configured durable object storage instead.
     urlpatterns += [
         re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
     ]

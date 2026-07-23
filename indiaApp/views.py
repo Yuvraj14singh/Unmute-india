@@ -6,7 +6,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import IntegrityError, transaction
 from django.db.models import BooleanField, Count, Exists, F, Max, OuterRef, Prefetch, Q, Subquery, Value
 from django.core.paginator import Paginator
-from django.http import FileResponse, JsonResponse
+from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.templatetags.static import static
@@ -613,8 +613,14 @@ def my_space_media(request, public_id):
         ListeningRequest.objects.filter(owner_filter).exclude(media=''),
         public_id=public_id,
     )
+    if not item.media_available:
+        raise Http404('This uploaded file is no longer available.')
     content_type=mimetypes.guess_type(item.media.name)[0] or 'application/octet-stream'
-    response=FileResponse(item.media.open('rb'),content_type=content_type)
+    try:
+        media_file=item.media.open('rb')
+    except (FileNotFoundError, OSError):
+        raise Http404('This uploaded file is no longer available.')
+    response=FileResponse(media_file,content_type=content_type)
     response['Content-Disposition']=f'inline; filename="submission-{item.public_id}"'
     response['X-Content-Type-Options']='nosniff'
     response['Cache-Control']='private, no-store'

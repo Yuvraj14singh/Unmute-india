@@ -3,6 +3,6 @@
   <span class="space-type">{{ item.get_kind_display }}</span>
   <h2 id="submission-title-{{ item.public_id }}">{{ item.title|default:"Untitled submission" }}</h2>
   {% if item.message %}<div class="space-dialog__message">{{ item.message|linebreaksbr }}</div>{% endif %}
-  {% if item.kind == 'audio' and item.media %}<audio controls preload="none" src="{% url 'my_space_media' item.public_id %}"></audio>{% elif item.kind == 'video' and item.media %}<video controls preload="none" playsinline src="{% url 'my_space_media' item.public_id %}"></video>{% endif %}
+  {% if item.kind == 'audio' and item.media_available %}<audio controls preload="none" src="{% url 'my_space_media' item.public_id %}"></audio>{% elif item.kind == 'video' and item.media_available %}<video controls preload="none" playsinline src="{% url 'my_space_media' item.public_id %}"></video>{% elif item.media %}<p class="space-media-missing" role="status">This uploaded file is no longer available. Please upload it again.</p>{% endif %}
   <dl><div><dt>Submitted</dt><dd>{{ item.created_at|date:"d M Y · h:i A" }}</dd></div><div><dt>Status</dt><dd>{{ item.space_status }}</dd></div><div><dt>Visibility</dt><dd>{{ item.space_visibility }}</dd></div>{% if item.published_story.published_at %}<div><dt>Published</dt><dd>{{ item.published_story.published_at|date:"d M Y" }}</dd></div>{% endif %}</dl>
 </dialog>

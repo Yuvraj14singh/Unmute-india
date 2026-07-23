@@ -3,7 +3,7 @@
   <div class="space-card__body">
     <h3>{{ item.title|default:"Untitled audio story" }}</h3>
     {% if item.message %}<p>{{ item.message }}</p>{% endif %}
-    {% if item.media %}
+    {% if item.media_available %}
       <div class="space-audio" data-space-audio>
         <audio preload="metadata" src="{% url 'my_space_media' item.public_id %}"></audio>
         <button type="button" class="space-audio__play" data-audio-play aria-label="Play audio">▶</button>
@@ -13,6 +13,8 @@
         </div>
         <button type="button" class="space-audio__mute" data-audio-mute aria-label="Mute audio" aria-pressed="false">♪</button>
       </div>
+    {% elif item.media %}
+      <p class="space-media-missing" role="status">This audio file is no longer available. Please upload it again.</p>
     {% endif %}
     {% if item.published_story.duration %}<small>Duration {{ item.published_story.duration }}</small>{% endif %}
   </div>

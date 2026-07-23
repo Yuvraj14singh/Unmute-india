@@ -120,6 +120,8 @@ class ListeningRequestAdmin(admin.ModelAdmin):
 
     def _publish(self,request,item):
         if not self.has_change_permission(request,item) or not self._eligible(item): return False,'Consent, safety or content requirements are not complete.'
+        if item.kind in ('audio','video') and not item.media_available:
+            return False,'The uploaded media file is missing. Ask for a fresh upload before publishing.'
         previous=item.publication_status
         with transaction.atomic():
             # The confirmed Approve & Publish action is the staff privacy-review decision.
