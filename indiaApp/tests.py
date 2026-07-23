@@ -265,14 +265,34 @@ class UnmutedVoicesUpgradeTests(TestCase):
         self.assertRegex(item.tracking_code,r'^UNM-[A-HJ-NP-Z2-9]{6}$')
         self.assertNotIn(str(item.pk),item.tracking_code)
 
-    def test_pending_reply_is_not_public_and_depth_is_limited(self):
+    def test_reply_is_immediately_public_and_depth_is_limited(self):
         parent=StoryComment.objects.create(story=self.story,body='I hear you.',approved=True,status='approved')
         response=self.client.post(reverse('story_comment',args=[self.story.pk]),{'body':'You are not alone.','parent':parent.pk})
         self.assertEqual(response.status_code,200)
-        self.assertNotContains(self.client.get(reverse('story_comments',args=[self.story.pk])),'You are not alone.')
+        self.assertContains(self.client.get(reverse('story_comments',args=[self.story.pk])),'You are not alone.')
         reply=StoryComment.objects.get(parent=parent)
+        self.assertTrue(reply.approved)
+        self.assertEqual(reply.status,'approved')
         response=self.client.post(reverse('story_comment',args=[self.story.pk]),{'body':'A nested reply.','parent':reply.pk})
         self.assertEqual(response.status_code,404)
+
+    def test_comment_is_immediately_visible_without_staff_approval(self):
+        response=self.client.post(reverse('story_comment',args=[self.story.pk]),{'body':'Thank you for sharing this.'})
+        self.assertTrue(response.json()['approved'])
+        comment=StoryComment.objects.get(body='Thank you for sharing this.')
+        self.assertTrue(comment.approved)
+        self.assertEqual(comment.status,'approved')
+        self.assertContains(self.client.get(reverse('story_comments',args=[self.story.pk])),'Thank you for sharing this.')
+
+    def test_video_card_uses_custom_controls_and_links_to_detail(self):
+        self.story.story_format='video'
+        self.story.public_media.name='stories/public-video.webm'
+        self.story.save(update_fields=('story_format','public_media','updated_at'))
+        response=self.client.get(reverse('voices_video'))
+        self.assertContains(response,'data-video-player')
+        self.assertContains(response,'video-mute')
+        self.assertContains(response,reverse('story_detail',args=[self.story.slug]))
+        self.assertNotContains(response,'<video controls',html=False)
 
     def test_comment_reaction_toggles_and_report_enters_review(self):
         comment=StoryComment.objects.create(story=self.story,body='Support.',approved=True,status='approved')

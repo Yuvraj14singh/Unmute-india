@@ -4,6 +4,19 @@
     e.preventDefault(); const button=form.querySelector('button'); if(button.disabled)return; button.disabled=true;
     try{const body=new FormData(form);body.set('json','1');const r=await fetch(form.action,{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},body});const data=await r.json();if(!r.ok)throw Error();button.setAttribute('aria-pressed',String(data.active));button.classList.toggle('active',data.active);button.querySelector('[data-reaction-count]').textContent=data.count}catch{button.setAttribute('aria-label','Could not update support. Try again.')}finally{button.disabled=false}
   }));
+  const formatTime=value=>{const seconds=Math.max(0,Math.floor(value||0));return `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`};
+  document.querySelectorAll('[data-video-player]').forEach(player=>{
+    const video=player.querySelector('video'),play=player.querySelector('.video-play'),mute=player.querySelector('.video-mute'),bar=player.querySelector('.video-progress i'),time=player.querySelector('.video-time');
+    const sync=()=>{const playing=!video.paused&&!video.ended;player.classList.toggle('is-playing',playing);play.textContent=playing?'Ⅱ':'▶';play.setAttribute('aria-label',playing?'Pause video':'Play video');bar.style.width=`${video.duration?video.currentTime/video.duration*100:0}%`;time.textContent=formatTime(video.currentTime)};
+    const toggle=()=>video.paused?video.play():video.pause();
+    play.addEventListener('click',e=>{e.stopPropagation();toggle()});video.addEventListener('click',e=>{e.stopPropagation();toggle()});
+    mute.addEventListener('click',e=>{e.stopPropagation();video.muted=!video.muted;mute.classList.toggle('is-unmuted',!video.muted);mute.setAttribute('aria-pressed',String(video.muted));mute.setAttribute('aria-label',video.muted?'Unmute video':'Mute video');mute.querySelector('span').textContent=video.muted?'⌁':'♪';mute.querySelector('b').textContent=video.muted?'Muted':'Sound on'});
+    video.addEventListener('timeupdate',sync);video.addEventListener('play',sync);video.addEventListener('pause',sync);video.addEventListener('ended',sync);
+  });
+  document.querySelectorAll('.video-story-card').forEach(card=>{
+    card.addEventListener('click',e=>{if(!e.target.closest('a,button,form,[data-video-player]'))location.href=card.dataset.detailUrl});
+    card.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target===card){e.preventDefault();location.href=card.dataset.detailUrl}});
+  });
   const overlay=document.querySelector('[data-comments-overlay]'); if(!overlay)return;
   const modal=overlay.querySelector('.comments-modal'),list=overlay.querySelector('[data-comments-list]'),status=overlay.querySelector('[data-comments-status]'),count=overlay.querySelector('[data-comments-count]'),compose=overlay.querySelector('[data-comment-compose]'),more=overlay.querySelector('[data-comments-more]');
   let storyId=null,page=1,lastFocus=null;
@@ -21,5 +34,5 @@
   });
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!overlay.hidden)close();if(e.key==='Tab'&&!overlay.hidden){const f=[...modal.querySelectorAll('button:not([hidden]),input,textarea')].filter(x=>!x.disabled);if(e.shiftKey&&document.activeElement===f[0]){e.preventDefault();f.at(-1).focus()}else if(!e.shiftKey&&document.activeElement===f.at(-1)){e.preventDefault();f[0].focus()}}});
   more.addEventListener('click',()=>{page++;load()});
-  compose.addEventListener('submit',async e=>{e.preventDefault();const button=compose.querySelector('[type=submit]');button.disabled=true;const r=await fetch(`/stories/${storyId}/comment/`,{method:'POST',body:new FormData(compose)});const d=await r.json();status.textContent=d.message; if(r.ok){compose.reset();compose.parent.value=''}button.disabled=false});
+  compose.addEventListener('submit',async e=>{e.preventDefault();const button=compose.querySelector('[type=submit]');button.disabled=true;const r=await fetch(`/stories/${storyId}/comment/`,{method:'POST',body:new FormData(compose)});const d=await r.json();status.textContent=d.message;if(r.ok){compose.reset();compose.parent.value='';await load(true);status.textContent=d.message;const opener=document.querySelector(`[data-comments-open][data-story="${storyId}"] span`);if(opener)opener.textContent=String(Number(opener.textContent||0)+1)}button.disabled=false});
 })();

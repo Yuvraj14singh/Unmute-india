@@ -390,8 +390,8 @@ def story_comment(request, pk):
     if request.POST.get('parent'):
         parent=get_object_or_404(StoryComment,pk=request.POST['parent'],story=story,parent__isnull=True,approved=True,status='approved',removed_at__isnull=True)
         if parent.thread_locked: return JsonResponse({'ok':False,'message':'This thread is closed.'},status=403)
-    comment=story.comments.create(parent=parent,display_name=request.POST.get('display_name','').strip()[:80],body=body,approved=False,status='pending')
-    return JsonResponse({'ok':True,'message':'Your supportive comment is waiting for moderation.','comment_id':comment.pk})
+    comment=story.comments.create(parent=parent,display_name=request.POST.get('display_name','').strip()[:80],body=body,approved=True,status='approved',approved_at=timezone.now())
+    return JsonResponse({'ok':True,'message':'Your supportive response is now visible.','comment_id':comment.pk,'approved':True})
 
 @require_POST
 def react(request, pk):
