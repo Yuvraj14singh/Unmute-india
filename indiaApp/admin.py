@@ -14,6 +14,11 @@ from .models import *
 
 logger = logging.getLogger(__name__)
 
+class HiddenFromAdminIndex:
+    """Keep an internal model available by direct URL without cluttering admin home."""
+    def get_model_perms(self, request):
+        return {}
+
 @admin.register(ListeningRequest)
 class ListeningRequestAdmin(admin.ModelAdmin):
     change_list_template='admin/indiaApp/listeningrequest/change_list.html'
@@ -382,7 +387,7 @@ class CommentReportAdmin(admin.ModelAdmin):
     readonly_fields=('comment','reason','details','session_key_hash','created_at','updated_at')
 
 @admin.register(StoryReaction)
-class StoryReactionAdmin(admin.ModelAdmin):
+class StoryReactionAdmin(HiddenFromAdminIndex, admin.ModelAdmin):
     list_display=('story','reaction','identity_type','anonymous_hash','created_at')
     list_filter=('reaction','created_at')
     search_fields=('story__title',)
@@ -398,7 +403,7 @@ class StoryReactionAdmin(admin.ModelAdmin):
         return f'{value[:10]}…' if value else 'Legacy'
 
 @admin.register(CommentReaction)
-class CommentReactionAdmin(admin.ModelAdmin):
+class CommentReactionAdmin(HiddenFromAdminIndex, admin.ModelAdmin):
     list_display=('comment','anonymous_hash','created_at')
     search_fields=('comment__body','comment__story__title')
     readonly_fields=('comment','private_identity','anonymous_hash','created_at','updated_at')
@@ -407,7 +412,7 @@ class CommentReactionAdmin(admin.ModelAdmin):
     def anonymous_hash(self,obj): return f'{obj.session_key_hash[:10]}…'
 
 @admin.register(PrivateIdentity)
-class PrivateIdentityAdmin(admin.ModelAdmin):
+class PrivateIdentityAdmin(HiddenFromAdminIndex, admin.ModelAdmin):
     list_display=('id','identity_status','source','sync_consent_at','last_seen_at','is_active','internal_reference')
     list_filter=('identity_status','source','is_active')
     readonly_fields=('identity_status','source','sync_consent_at','last_seen_at','is_active','merged_into','internal_reference','created_at','updated_at')
@@ -419,7 +424,29 @@ class PrivateIdentityAdmin(admin.ModelAdmin):
     def has_add_permission(self,request): return False
     def has_delete_permission(self,request,obj=None): return False
 
-admin.site.register([UserProfile, ListenerProfile, ConversationMessage, AccountabilityEvent, EvidenceDocument, PublicQuestion, PromiseTracker, AuthorityResponse, SupportResource, VolunteerApplication, AuditLog])
+@admin.register(UserProfile)
+class UserProfileAdmin(HiddenFromAdminIndex, admin.ModelAdmin):
+    pass
+
+@admin.register(ConversationMessage)
+class ConversationMessageAdmin(HiddenFromAdminIndex, admin.ModelAdmin):
+    pass
+
+@admin.register(AuditLog)
+class AuditLogAdmin(HiddenFromAdminIndex, admin.ModelAdmin):
+    pass
+
+# These are the content and operations areas staff actually needs from admin home.
+admin.site.register([
+    ListenerProfile,
+    AccountabilityEvent,
+    EvidenceDocument,
+    PublicQuestion,
+    PromiseTracker,
+    AuthorityResponse,
+    SupportResource,
+    VolunteerApplication,
+])
 admin.site.site_header = 'Unmute India moderation'
 admin.site.site_title = 'Unmute India Staff'
 admin.site.index_title = 'Moderation and platform operations'

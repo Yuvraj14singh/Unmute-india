@@ -93,6 +93,9 @@ class ListeningRequest(TimeStampedModel):
     public_consent_withdrawn_at = models.DateTimeField(null=True, blank=True)
     moderation_notes = models.TextField(blank=True)
     privacy_review_complete = models.BooleanField(default=False)
+    def __str__(self):
+        return self.title.strip() or f'{self.get_kind_display()} submission'
+
     def save(self, *args, **kwargs):
         if not self.tracking_code:
             while True:
@@ -373,6 +376,9 @@ class PetitionSignature(TimeStampedModel):
     turnstile_verified_at = models.DateTimeField(null=True, blank=True)
     verification_metadata = models.JSONField(default=dict, blank=True)
     private_identity = models.ForeignKey(PrivateIdentity, null=True, blank=True, related_name='petition_signatures', on_delete=models.PROTECT)
+    def __str__(self):
+        return self.name.strip() or 'Petition supporter'
+
     def save(self, *args, **kwargs):
         self.normalized_email = self.email.strip().casefold()
         self.email = self.email.strip()
