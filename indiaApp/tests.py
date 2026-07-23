@@ -233,6 +233,19 @@ class DedicatedStoryPageTests(TestCase):
         self.assertContains(self.client.get(reverse('exam_pressure_stories')),'Visible text exam story')
         self.assertNotContains(self.client.get(reverse('exam_pressure_stories')),'Visible voice hope story')
 
+    def test_format_pages_use_compact_cards_and_filter_by_publication_date(self):
+        first=self.public_story('first-day-story',body='Visible on first day')
+        second=self.public_story('second-day-story',body='Visible on second day')
+        first.published_at=timezone.datetime(2026,7,22,10,tzinfo=timezone.utc)
+        second.published_at=timezone.datetime(2026,7,23,10,tzinfo=timezone.utc)
+        first.save(update_fields=('published_at','updated_at'))
+        second.save(update_fields=('published_at','updated_at'))
+        response=self.client.get(reverse('voices_text'),{'date':'2026-07-22'})
+        self.assertContains(response,'Visible on first day')
+        self.assertNotContains(response,'Visible on second day')
+        self.assertContains(response,'story-grid--shelf')
+        self.assertContains(response,'story-date-filter')
+
     def test_unapproved_or_unconsented_story_never_appears(self):
         Story.objects.create(slug='private-story',title='Never Public',body='Sensitive private content',approved=False,moderation_status='draft')
         Story.objects.create(slug='no-consent',title='No Consent',body='No consent content',approved=True,moderation_status='published',public_consent=False,privacy_review_complete=True)
@@ -323,6 +336,8 @@ class UnmutedVoicesUpgradeTests(TestCase):
         self.assertNotIn('min-height: 100vh',css)
         self.assertNotIn(':has(',css)
         self.assertIn('grid-template-columns: minmax(0, 1fr) !important',css)
+        responsive=Path('static/css/responsive.css').read_text()
+        self.assertNotIn('.story-card form button:nth-child(n+2)',responsive)
 
     def test_missing_media_story_does_not_render(self):
         missing=Story.objects.create(slug='missing-audio',title='Broken audio card',body='No media',story_format='voice',approved=True,moderation_status='published',public_consent=True,privacy_review_complete=True)

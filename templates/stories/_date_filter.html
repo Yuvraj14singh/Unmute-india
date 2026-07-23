@@ -1,0 +1,9 @@
+{% if available_dates %}
+<nav class="story-date-filter" aria-label="Filter stories by publication date">
+  <span>Published on</span>
+  <a href="?"{% if not selected_date %} class="active" aria-current="page"{% endif %}>All dates</a>
+  {% for day in available_dates %}
+    <a href="?date={{ day|date:'Y-m-d' }}"{% if selected_date == day|date:'Y-m-d' %} class="active" aria-current="page"{% endif %}>{{ day|date:'d M Y' }}</a>
+  {% endfor %}
+</nav>
+{% endif %}

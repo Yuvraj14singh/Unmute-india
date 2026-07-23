@@ -241,5 +241,5 @@ section h3 { line-height: 1.2; }
   .featured-feed .story-card { padding: .85rem !important; border-radius: 18px !important; }
   .featured-feed .story-card h3 { font-size: 1.05rem !important; margin-top: .8rem !important; }
   .featured-feed .story-card p { font-size: .75rem; }
-  .featured-feed .story-card form button:nth-child(n+2),.featured-feed .badges span:nth-child(n+3) { display: none; }
+  .featured-feed .badges span:nth-child(n+3) { display: none; }
 }

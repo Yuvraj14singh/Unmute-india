@@ -360,8 +360,30 @@ def public_stories():
 def story_format_page(request, story_format):
     templates={'text':'stories/text_stories.html','voice':'stories/voice_stories.html','video':'stories/video_stories.html'}
     if story_format not in templates: return redirect('stories')
-    page=Paginator(public_stories().filter(story_format=story_format), 8 if story_format!='video' else 4).get_page(request.GET.get('page'))
-    return render(request,templates[story_format],{'page_obj':page,'stories':page.object_list,'story_format':story_format})
+    queryset=public_stories().filter(story_format=story_format)
+    available_dates=sorted({
+        timezone.localdate(item.published_at or item.created_at)
+        for item in queryset.only('published_at','created_at')
+    },reverse=True)
+    selected_date=request.GET.get('date','')
+    if selected_date:
+        try:
+            selected=timezone.datetime.strptime(selected_date,'%Y-%m-%d').date()
+        except ValueError:
+            selected_date=''
+        else:
+            queryset=queryset.filter(
+                Q(published_at__date=selected)|
+                Q(published_at__isnull=True,created_at__date=selected)
+            )
+    page=Paginator(queryset, 8 if story_format!='video' else 4).get_page(request.GET.get('page'))
+    return render(request,templates[story_format],{
+        'page_obj':page,
+        'stories':page.object_list,
+        'story_format':story_format,
+        'available_dates':available_dates,
+        'selected_date':selected_date,
+    })
 
 TOPIC_PAGES={
     'hope':('stories/hope_stories.html','Hope Stories'),
