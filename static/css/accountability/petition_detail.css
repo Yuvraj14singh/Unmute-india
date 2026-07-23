@@ -191,13 +191,24 @@
 }
 .google-button-shell.is-disabled,
 .google-button-shell.is-disabled>div,
-.google-button-shell.is-disabled iframe{
-  pointer-events:none!important;
-}
+.google-button-shell.is-disabled iframe{pointer-events:auto!important}
 @media(max-width:767px){
   .google-button-shell{
     width:min(100%,400px);
     margin-inline:auto;
     justify-content:center;
   }
+}
+
+/* GIS owns the iframe dimensions and click target. Do not scale or clip it. */
+.google-button-shell{overflow:visible;isolation:auto}
+.google-button-shell>div{
+  width:auto!important;
+  max-width:none!important;
+  overflow:visible!important;
+}
+.google-button-shell iframe{
+  width:auto!important;
+  max-width:none!important;
+  pointer-events:auto!important;
 }

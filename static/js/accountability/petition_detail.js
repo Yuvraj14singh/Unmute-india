@@ -78,9 +78,11 @@ if (petitionForm) {
     // Keep the Google iframe's complete visual surface tappable. Disabling its
     // parent while forcing pointer-events on the child produced a mismatched
     // mobile hit area where only an overflowing edge received taps.
-    const googleUnavailable = !googleReady || submitting;
-    googleShell.classList.toggle('is-disabled', googleUnavailable);
-    googleShell.setAttribute('aria-disabled', String(googleUnavailable));
+    // Never disable the cross-origin GIS iframe with pointer-events. On mobile
+    // browsers that can leave the painted button visible while its hit target is
+    // unavailable. Submission validation still runs in submitCredential().
+    googleShell.classList.remove('is-disabled');
+    googleShell.setAttribute('aria-disabled', 'false');
 
     if (!detailsComplete) {
       activeStep.textContent = 'Complete your details';
