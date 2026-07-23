@@ -124,6 +124,7 @@
 .verified-success>p strong{color:#087f4f;font-size:1.15rem}
 .verified-success dl{max-width:420px;margin:1rem auto}
 .verified-success>div:last-of-type{justify-content:center}
+.verified-success .pill.ghost{border-color:color-mix(in srgb,var(--ink) 55%,transparent);background:transparent;color:var(--ink)}
 
 [data-theme=dark] .signature-card{background:#0b282b;border-color:#dce8dd20;color:#f4efe2}
 [data-theme=dark] .signature-card input:not([type=checkbox]),[data-theme=dark] .signature-card select{background:#112f31;color:#f4efe2;border-color:#dce8dd33}
