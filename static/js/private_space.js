@@ -1,10 +1,4 @@
 document.addEventListener('DOMContentLoaded',()=>{
-  document.querySelectorAll('[data-space-tab]').forEach(button=>{
-    button.addEventListener('click',()=>{
-      document.querySelectorAll('[data-space-tab]').forEach(item=>item.classList.toggle('active',item===button));
-      document.querySelectorAll('[data-space-panel]').forEach(panel=>panel.hidden=panel.dataset.spacePanel!==button.dataset.spaceTab);
-    });
-  });
   const config=window.unmuteMySpace;
   const mount=document.querySelector('#my-space-google');
   if(!config||!mount) return;

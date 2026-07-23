@@ -24,12 +24,7 @@
     </article>
     {% if guest_submissions %}<section class="browser-activity"><h2>Saved on this browser</h2><div class="space-grid">{% for item in guest_submissions %}<article class="space-card"><span>{{ item.get_kind_display }}</span><h3>{{ item.title|default:item.message|truncatewords:18|default:"Private submission" }}</h3><time>{{ item.created_at|date:"d M Y" }}</time><p>{{ item.get_publication_status_display }}</p></article>{% endfor %}</div></section>{% endif %}
   {% else %}
-    <nav class="space-tabs" aria-label="My Space sections">
-      <button class="active" data-space-tab="submissions">Submissions</button>
-      <button data-space-tab="reactions">Reactions</button>
-      <button data-space-tab="responses">Supported Responses</button>
-    </nav>
-    <section data-space-panel="submissions">
+    <section>
       <h2>My Submissions</h2>
       <div class="space-grid">
       {% for item in submissions %}
@@ -41,14 +36,6 @@
         </article>
       {% empty %}<p>No privately linked submissions yet.</p>{% endfor %}
       </div>
-    </section>
-    <section data-space-panel="reactions" hidden>
-      <h2>My Reactions</h2>
-      <div class="space-grid">{% for item in reactions %}<article class="space-card"><span>I hear you</span><h3>{{ item.story.title|default:"Anonymous story" }}</h3><a href="{{ item.story.get_absolute_url|default:'#' }}">Open public story</a></article>{% empty %}<p>No reactions yet.</p>{% endfor %}</div>
-    </section>
-    <section data-space-panel="responses" hidden>
-      <h2>Supported Responses</h2>
-      <div class="space-grid">{% for item in supported_responses %}<article class="space-card"><span>Supported response</span><p>{{ item.comment.body|truncatewords:30 }}</p><small>Public content remains anonymous and is not linked into a public profile.</small></article>{% empty %}<p>No supported responses yet.</p>{% endfor %}</div>
     </section>
     <p class="space-privacy">Your public submissions are not linked together as belonging to the same person.</p>
   {% endif %}

@@ -130,7 +130,7 @@ def _merge_identity_rows(source, target):
 
 
 @transaction.atomic
-def merge_guest_activity(identity, guest_key):
+def merge_guest_activity(identity, guest_key, submission_reference=None):
     """Idempotently move one browser's private activity to a consented identity."""
     if not guest_key:
         return
@@ -163,3 +163,8 @@ def merge_guest_activity(identity, guest_key):
     ListeningRequest.objects.filter(
         guest_key=guest_key, private_identity__isnull=True
     ).update(private_identity=identity, guest_key='')
+    if submission_reference:
+        ListeningRequest.objects.filter(
+            public_id=submission_reference,
+            private_identity__isnull=True,
+        ).update(private_identity=identity, guest_key='')

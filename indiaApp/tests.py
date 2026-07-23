@@ -391,12 +391,21 @@ class PrivateIdentitySystemTests(TestCase):
     @patch('indiaApp.views._verify_google_credential')
     def test_my_space_verification_rotates_session_and_never_signs_petition(self, verify):
         verify.return_value={'sub':'restore-sub','email':'restore@example.com','issuer':'accounts.google.com'}
+        legacy_submission=ListeningRequest.objects.create(
+            kind='text',
+            message='Created before private identity support',
+        )
+        session=self.client.session
+        session['last_submission']=str(legacy_submission.public_id)
+        session.save()
         old_key=self.client.session.session_key
         response=self.client.post(reverse('my_space_google_sync'),{'credential':'raw-token','sync_consent':'1'})
         self.assertEqual(response.status_code,200)
         self.assertFalse(PetitionSignature.objects.exists())
         self.assertNotEqual(self.client.session.session_key,old_key)
         self.assertNotIn('raw-token',str(PrivateIdentity.objects.values().first()))
+        legacy_submission.refresh_from_db()
+        self.assertIsNotNone(legacy_submission.private_identity_id)
 
     @patch('indiaApp.views._verify_google_credential')
     def test_my_space_page_issues_csrf_cookie_for_google_callback(self, verify):
@@ -463,6 +472,18 @@ class PrivateIdentitySystemTests(TestCase):
         self.attach(owner,first); self.attach(stranger,second)
         self.assertContains(owner.get(reverse('my_space')),'Only owner one')
         self.assertNotContains(stranger.get(reverse('my_space')),'Only owner one')
+
+    def test_existing_verified_session_claims_its_last_legacy_submission(self):
+        identity=resolve_google_identity('legacy-owner','legacy-owner@example.com',consent=True)
+        submission=ListeningRequest.objects.create(kind='text',message='Legacy browser submission')
+        self.attach(self.client,identity)
+        session=self.client.session
+        session['last_submission']=str(submission.public_id)
+        session.save()
+        response=self.client.get(reverse('my_space'))
+        self.assertContains(response,'Legacy browser submission')
+        submission.refresh_from_db()
+        self.assertEqual(submission.private_identity,identity)
 
 class UnmutedVoicesUpgradeTests(TestCase):
     def setUp(self):

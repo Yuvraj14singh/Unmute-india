@@ -540,22 +540,15 @@ def my_space(request):
     identity=request.private_identity
     guest_submissions=ListeningRequest.objects.none()
     submissions=ListeningRequest.objects.none()
-    reactions=StoryReaction.objects.none()
-    supported=CommentReaction.objects.none()
     if identity:
+        merge_guest_activity(
+            identity,
+            request.anonymous_reaction_key,
+            request.session.get('last_submission'),
+        )
         submissions=identity.submissions.select_related('published_story').only(
             'public_id','kind','title','message','created_at','status',
             'publication_status','reviewed_at','published_story__published_at',
-        ).order_by('-created_at')
-        reactions=identity.story_reactions.select_related('story').filter(
-            story__approved=True,
-            story__moderation_status='published',
-            story__removed_at__isnull=True,
-        ).order_by('-created_at')
-        supported=identity.comment_reactions.select_related('comment','comment__story').filter(
-            comment__approved=True,
-            comment__status='approved',
-            comment__removed_at__isnull=True,
         ).order_by('-created_at')
         PrivateIdentity.objects.filter(pk=identity.pk).update(last_seen_at=timezone.now())
     else:
@@ -567,8 +560,6 @@ def my_space(request):
         'identity':identity,
         'submissions':submissions,
         'guest_submissions':guest_submissions,
-        'reactions':reactions,
-        'supported_responses':supported,
         'google_client_id':settings.GOOGLE_CLIENT_ID,
     })
 
@@ -583,7 +574,11 @@ def my_space_google_sync(request):
     try:
         proof=_verify_google_credential(credential)
         identity=resolve_google_identity(proof['sub'],proof['email'],consent=True)
-        merge_guest_activity(identity,request.anonymous_reaction_key)
+        merge_guest_activity(
+            identity,
+            request.anonymous_reaction_key,
+            request.session.get('last_submission'),
+        )
     except PermissionError:
         return JsonResponse({'ok':False,'message':'This Google account does not have a verified email.'},status=400)
     except Exception as exc:
