@@ -1,7 +1,7 @@
 {% extends 'base.html' %}{% load static %}
 {% block title %}Unmuted Voices | Student thoughts, voice notes and videos{% endblock %}
 {% block social_meta %}<meta name="description" content="Read, listen to or watch moderated thoughts, confessions and experiences shared publicly by students."><meta property="og:title" content="Unmuted Voices | Unmute India"><meta property="og:description" content="Things students needed to say—shared with consent, moderation and privacy review."><meta property="og:type" content="website">{% endblock %}
-{% block css %}<link rel="stylesheet" href="{% static 'css/stories/feed.css' %}">{% endblock %}
+{% block css %}<link rel="stylesheet" href="{% static 'css/stories/feed.css' %}"><link rel="stylesheet" href="{% static 'css/stories/comments.css' %}">{% endblock %}
 {% block content %}
 <header class="stories-hero"><img src="{% static 'images/stories/stories-hero.webp' %}" alt="Indian students listening to one another on campus"><div class="stories-hero__veil"></div><div><p class="eyebrow">MODERATED · CONSENT-LED · HUMAN</p><h1>Things students <em>needed to say.</em></h1><p>Read, listen to or watch thoughts, confessions and experiences shared by students who chose to speak publicly.</p><nav><a class="pill saffron" href="{% url 'share' 'text' %}">Share What You Feel</a><a class="pill ghost" href="{% url 'talk' %}">Talk Privately Instead</a></nav><small>Private submissions never appear here without clear public-sharing consent, staff approval and a privacy review.</small></div></header>
 {% include 'stories/_collection_nav.html' %}

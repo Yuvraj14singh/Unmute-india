@@ -294,6 +294,29 @@ class UnmutedVoicesUpgradeTests(TestCase):
         self.assertContains(response,reverse('story_detail',args=[self.story.slug]))
         self.assertNotContains(response,'<video controls',html=False)
 
+    def test_reusable_comments_modal_is_present_for_every_format(self):
+        for name in ('voices_text','voices_voice','voices_video'):
+            response=self.client.get(reverse(name))
+            self.assertContains(response,'data-comments-overlay',count=1)
+            self.assertContains(response,'comments-scroll')
+            self.assertContains(response,'comments-composer')
+            self.assertContains(response,'data-reply-context')
+            self.assertContains(response,'data-report-sheet')
+
+    def test_comment_openers_carry_compact_post_context(self):
+        response=self.client.get(reverse('voices_text'))
+        self.assertContains(response,'data-format="Text"')
+        self.assertContains(response,'data-author=')
+        self.assertContains(response,'data-excerpt=')
+
+    def test_comments_styles_define_desktop_and_mobile_panel_constraints(self):
+        source=(Path(__file__).resolve().parent.parent/'static/css/stories/comments.css').read_text()
+        self.assertIn('width:min(780px',source)
+        self.assertIn('max-height:84vh',source)
+        self.assertIn('.comments-scroll{min-height:0;overflow-y:auto',source)
+        self.assertIn('.comments-composer',source)
+        self.assertIn('max-height:88svh',source)
+
     def test_comment_reaction_toggles_and_report_enters_review(self):
         comment=StoryComment.objects.create(story=self.story,body='Support.',approved=True,status='approved')
         url=reverse('comment_react',args=[comment.pk])

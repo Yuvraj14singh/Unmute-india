@@ -1,1 +1,34 @@
-<div class="comments-overlay" data-comments-overlay hidden><section class="comments-modal" role="dialog" aria-modal="true" aria-labelledby="comments-title"><header><div><small>UNMUTED VOICES</small><h2 id="comments-title">Supportive responses</h2><p data-comments-count></p></div><button type="button" data-comments-close aria-label="Close responses">×</button></header><div class="comments-status" aria-live="polite" data-comments-status></div><div class="comments-list" data-comments-list></div><button type="button" class="quiet-action" data-comments-more hidden>Load more</button><form data-comment-compose>{% csrf_token %}<input type="hidden" name="parent"><label>Display name <small>optional</small><input name="display_name" maxlength="80" autocomplete="nickname"></label><label>Your supportive response<textarea name="body" minlength="3" maxlength="800" required></textarea></label><label class="check"><input type="checkbox" name="guidelines" required> <span>I agree to keep this supportive and protect everyone’s privacy.</span></label><button class="pill" type="submit">Send for moderation</button></form></section></div>
+<div class="comments-overlay" data-comments-overlay hidden>
+  <section class="comments-modal" role="dialog" aria-modal="true" aria-labelledby="comments-title">
+    <header class="comments-header">
+      <div class="comments-heading">
+        <span class="comments-format" data-comments-format>UNMUTED VOICES</span>
+        <h2 id="comments-title">Supportive responses</h2>
+        <p><span data-comments-author>Anonymous student</span> · <span data-comments-count>0 responses</span></p>
+      </div>
+      <button type="button" class="comments-close" data-comments-close aria-label="Close responses">×</button>
+    </header>
+    <div class="comments-context" data-comments-context hidden></div>
+    <div class="comments-scroll">
+      <div class="comments-status" aria-live="polite" data-comments-status></div>
+      <div class="comments-list" data-comments-list></div>
+      <button type="button" class="comments-more" data-comments-more hidden>Load more comments</button>
+    </div>
+    <form class="comments-composer" data-comment-compose>
+      {% csrf_token %}
+      <input type="hidden" name="parent">
+      <div class="reply-context" data-reply-context hidden><span>Replying to <b data-reply-name>Anonymous student</b></span><button type="button" data-reply-cancel>Cancel</button></div>
+      <div class="display-name-row" data-name-row hidden><label for="comments-display-name">Display name <small>optional</small></label><input id="comments-display-name" name="display_name" maxlength="80" autocomplete="nickname" placeholder="Name shown with this response"></div>
+      <div class="composer-row">
+        <textarea name="body" rows="1" minlength="3" maxlength="800" required placeholder="Write a supportive response…" aria-label="Write a supportive response"></textarea>
+        <button class="composer-send" type="submit"><span>Send</span></button>
+      </div>
+      <div class="composer-meta"><button type="button" data-name-toggle aria-expanded="false">Add display name</button><label><input type="checkbox" name="guidelines" required> I’ll keep this supportive and protect privacy.</label></div>
+    </form>
+  </section>
+  <section class="report-sheet" data-report-sheet role="dialog" aria-modal="true" aria-labelledby="report-title" hidden>
+    <header><h3 id="report-title">Report this response</h3><button type="button" data-report-close aria-label="Close report options">×</button></header>
+    <p>Choose the closest reason. Your report stays private.</p>
+    <form data-report-form>{% csrf_token %}<input type="hidden" name="comment_id"><div class="report-options"><label><input type="radio" name="reason" value="harassment" required> Harassment</label><label><input type="radio" name="reason" value="privacy"> Reveals private information</label><label><input type="radio" name="reason" value="unsafe"> Unsafe advice</label><label><input type="radio" name="reason" value="spam"> Spam</label><label><input type="radio" name="reason" value="hate"> Hate or abuse</label><label><input type="radio" name="reason" value="other"> Other</label></div><div><button type="button" data-report-close>Cancel</button><button class="pill" type="submit">Send report</button></div></form>
+  </section>
+</div>
