@@ -1,0 +1,106 @@
+.detail-conversation {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(300px, 1.1fr);
+  gap: clamp(24px, 5vw, 64px);
+  align-items: start;
+  margin: clamp(3rem, 7vw, 6rem) 0;
+  padding: clamp(1.4rem, 4vw, 2.8rem);
+  border: 1px solid #53705e35;
+  border-radius: 28px;
+  background: linear-gradient(145deg, #0b5c3b0b, #ff7b1908);
+  box-shadow: 0 22px 60px #0010170b;
+}
+
+.detail-conversation > div:first-child h2 {
+  margin: .45rem 0 .8rem;
+  font: 600 clamp(1.8rem, 4vw, 3rem)/1.04 Georgia, serif;
+}
+
+.detail-conversation > div:first-child > p:last-child {
+  max-width: 38ch;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.detail-comment-preview {
+  display: grid;
+}
+
+.detail-comment-preview article {
+  display: flex;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid #53705e22;
+}
+
+.detail-comment-preview article > span {
+  display: grid;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #0b7650, #07513f);
+  color: #fff;
+  font: 700 .85rem Georgia, serif;
+}
+
+.detail-comment-preview article div {
+  min-width: 0;
+}
+
+.detail-comment-preview b {
+  font-size: .82rem;
+}
+
+.detail-comment-preview p {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: .9rem;
+  line-height: 1.5;
+}
+
+.detail-comment-preview > p {
+  padding: 18px 0;
+  color: var(--muted);
+}
+
+.detail-comments-open {
+  width: 100%;
+  justify-content: center;
+  margin-top: 16px;
+  border: 0;
+  cursor: pointer;
+}
+
+.detail-comments-open span {
+  display: inline-grid;
+  min-width: 24px;
+  height: 24px;
+  margin-left: 7px;
+  place-items: center;
+  border-radius: 999px;
+  background: #fff3;
+  color: inherit;
+  font-size: .75rem;
+}
+
+.comment-rules {
+  grid-column: 1/-1;
+  margin: 0 !important;
+  background: transparent;
+}
+
+.comments-closed {
+  padding: 18px;
+  border-radius: 14px;
+  background: #53705e12;
+  color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  .detail-conversation {
+    grid-template-columns: 1fr;
+  }
+}

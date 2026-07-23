@@ -1,1 +1,7 @@
-const commentForm=document.querySelector('[data-comment-form]');commentForm?.addEventListener('submit',async event=>{event.preventDefault();const button=commentForm.querySelector('button'),status=commentForm.querySelector('[role=status]');button.disabled=true;button.textContent='Submitting…';try{const response=await fetch(commentForm.action,{method:'POST',body:new FormData(commentForm)}),data=await response.json();status.textContent=data.message;if(data.ok)commentForm.reset()}catch(error){status.textContent='The comment could not be submitted right now.'}button.disabled=false;button.textContent='Submit for moderation'});
+document.querySelectorAll('.detail-media video').forEach(video=>{
+  video.addEventListener('play',()=>{
+    document.querySelectorAll('.detail-media video').forEach(other=>{
+      if(other!==video)other.pause();
+    });
+  });
+});

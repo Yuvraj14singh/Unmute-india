@@ -4,7 +4,7 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.core.exceptions import ImproperlyConfigured
 from django.db import IntegrityError, transaction
-from django.db.models import Count, F, Q
+from django.db.models import Count, F, Max, Q, Subquery
 from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -356,7 +356,10 @@ def story_topic_page(request, topic):
 def story_detail(request, slug):
     story = get_object_or_404(public_stories(), slug=slug)
     related=public_stories().filter(topic=story.topic).exclude(pk=story.pk)[:3]
-    return render(request, 'stories/detail.html', {'story':story, 'comments':story.comments.filter(approved=True,status='approved',removed_at__isnull=True,parent__isnull=True).prefetch_related('replies'), 'related_stories':related})
+    public_filter=Q(approved=True,status='approved',removed_at__isnull=True)
+    latest_ids=story.comments.filter(public_filter,parent__isnull=True).order_by().values('display_name','body').annotate(latest_id=Max('pk')).values('latest_id')
+    comments=story.comments.filter(public_filter,parent__isnull=True,pk__in=Subquery(latest_ids)).prefetch_related('replies').order_by('-created_at')
+    return render(request, 'stories/detail.html', {'story':story, 'comments':comments, 'related_stories':related})
 
 def _session_hash(request):
     if not request.session.session_key:
@@ -373,11 +376,19 @@ def _rate_limited(request, key, limit, window_seconds):
 
 def story_comments(request, pk):
     story=get_object_or_404(public_stories(),pk=pk)
-    comments=story.comments.filter(parent__isnull=True,approved=True,status='approved',removed_at__isnull=True).annotate(like_count=Count('reactions')).prefetch_related('replies__reactions').order_by('-created_at')
-    page=Paginator(comments,10).get_page(request.GET.get('page'))
+    public_filter=Q(approved=True,status='approved',removed_at__isnull=True)
+    latest_top_ids=story.comments.filter(public_filter,parent__isnull=True).order_by().values('display_name','body').annotate(latest_id=Max('pk')).values('latest_id')
+    comments=story.comments.filter(public_filter,parent__isnull=True,pk__in=Subquery(latest_top_ids)).annotate(like_count=Count('reactions')).prefetch_related('replies__reactions').order_by('-created_at')
+    page=Paginator(comments,15).get_page(request.GET.get('page'))
     def pack(c):
-        return {'id':c.pk,'name':c.display_name or 'Anonymous student','body':c.body,'created':timezone.localtime(c.created_at).strftime('%d %b %Y · %I:%M %p'),'likes':getattr(c,'like_count',c.reactions.count()),'replies':[{'id':r.pk,'name':r.display_name or 'Anonymous student','body':r.body,'created':timezone.localtime(r.created_at).strftime('%d %b %Y · %I:%M %p'),'likes':r.reactions.count()} for r in c.replies.filter(approved=True,status='approved',removed_at__isnull=True)]}
-    return JsonResponse({'ok':True,'comments':[pack(c) for c in page.object_list],'count':story.comments.filter(approved=True,status='approved',removed_at__isnull=True).count(),'has_next':page.has_next(),'comments_mode':story.comment_mode})
+        seen=set(); replies=[]
+        for reply in c.replies.filter(approved=True,status='approved',removed_at__isnull=True).order_by('created_at'):
+            key=((reply.display_name or '').casefold(),' '.join(reply.body.split()).casefold())
+            if key in seen: continue
+            seen.add(key); replies.append({'id':reply.pk,'name':reply.display_name or 'Anonymous student','body':reply.body,'created':timezone.localtime(reply.created_at).strftime('%d %b %Y · %I:%M %p'),'likes':reply.reactions.count()})
+        return {'id':c.pk,'name':c.display_name or 'Anonymous student','body':c.body,'created':timezone.localtime(c.created_at).strftime('%d %b %Y · %I:%M %p'),'likes':getattr(c,'like_count',c.reactions.count()),'replies':replies}
+    unique_count=story.comments.filter(public_filter).order_by().values('parent_id','display_name','body').distinct().count()
+    return JsonResponse({'ok':True,'comments':[pack(c) for c in page.object_list],'count':unique_count,'has_next':page.has_next(),'comments_mode':story.comment_mode})
 
 @require_POST
 def story_comment(request, pk):
@@ -390,7 +401,11 @@ def story_comment(request, pk):
     if request.POST.get('parent'):
         parent=get_object_or_404(StoryComment,pk=request.POST['parent'],story=story,parent__isnull=True,approved=True,status='approved',removed_at__isnull=True)
         if parent.thread_locked: return JsonResponse({'ok':False,'message':'This thread is closed.'},status=403)
-    comment=story.comments.create(parent=parent,display_name=request.POST.get('display_name','').strip()[:80],body=body,approved=True,status='approved',approved_at=timezone.now())
+    display_name=request.POST.get('display_name','').strip()[:80]
+    duplicate=story.comments.filter(parent=parent,display_name__iexact=display_name,body__iexact=body,created_at__gte=timezone.now()-timezone.timedelta(minutes=2)).order_by('-created_at').first()
+    if duplicate:
+        return JsonResponse({'ok':True,'message':'This response is already visible.','comment_id':duplicate.pk,'approved':duplicate.approved,'duplicate':True})
+    comment=story.comments.create(parent=parent,display_name=display_name,body=body,approved=True,status='approved',approved_at=timezone.now())
     return JsonResponse({'ok':True,'message':'Your supportive response is now visible.','comment_id':comment.pk,'approved':True})
 
 @require_POST
