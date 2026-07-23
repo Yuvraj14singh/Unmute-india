@@ -1,4 +1,37 @@
 document.addEventListener('DOMContentLoaded',()=>{
+  const formatAudioTime=value=>{
+    if(!Number.isFinite(value))return '--:--';
+    const seconds=Math.max(0,Math.floor(value));
+    return `${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;
+  };
+  document.querySelectorAll('[data-space-audio]').forEach(player=>{
+    const audio=player.querySelector('audio');
+    const play=player.querySelector('[data-audio-play]');
+    const mute=player.querySelector('[data-audio-mute]');
+    const progress=player.querySelector('[data-audio-progress]');
+    const current=player.querySelector('[data-audio-current]');
+    const duration=player.querySelector('[data-audio-duration]');
+    const sync=()=>{
+      play.textContent=audio.paused?'▶':'Ⅱ';
+      play.setAttribute('aria-label',audio.paused?'Play audio':'Pause audio');
+      current.textContent=formatAudioTime(audio.currentTime);
+      duration.textContent=formatAudioTime(audio.duration);
+      if(!progress.matches(':active'))progress.value=audio.duration?Math.round(audio.currentTime/audio.duration*1000):0;
+    };
+    play.addEventListener('click',()=>{
+      document.querySelectorAll('[data-space-audio] audio').forEach(other=>{if(other!==audio)other.pause()});
+      if(audio.paused)audio.play().catch(()=>{});else audio.pause();
+    });
+    mute.addEventListener('click',()=>{
+      audio.muted=!audio.muted;
+      mute.textContent=audio.muted?'×':'♪';
+      mute.setAttribute('aria-pressed',String(audio.muted));
+      mute.setAttribute('aria-label',audio.muted?'Unmute audio':'Mute audio');
+    });
+    progress.addEventListener('input',()=>{if(audio.duration)audio.currentTime=Number(progress.value)/1000*audio.duration});
+    ['loadedmetadata','durationchange','timeupdate','play','pause','ended'].forEach(name=>audio.addEventListener(name,sync));
+    sync();
+  });
   document.querySelectorAll('[data-space-dialog-open]').forEach(button=>{
     button.addEventListener('click',()=>{
       const dialog=document.getElementById(button.dataset.spaceDialogOpen);
