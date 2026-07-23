@@ -33,6 +33,15 @@ class ListeningRequestAdmin(admin.ModelAdmin):
         ('Record', {'fields':('updated_at',)}),
     )
 
+    def get_deleted_objects(self, objs, request):
+        deleted, counts, permissions, protected=super().get_deleted_objects(objs,request)
+        if any(item.published_story_id and item.publication_status == 'published' for item in objs):
+            deleted.insert(0,format_html(
+                '<strong>This submission is currently published. '
+                'Deleting it will unpublish it and remove it from Unmuted Voices.</strong>'
+            ))
+        return deleted,counts,permissions,protected
+
     def get_urls(self):
         urls=super().get_urls()
         custom=[
@@ -118,6 +127,7 @@ class ListeningRequestAdmin(admin.ModelAdmin):
             story.display_name='Anonymous Student' if item.anonymous else 'Student'
             story.story_format={'audio':'voice','video':'video'}.get(item.kind,'text')
             story.comment_mode=item.comment_preference
+            story.source_was_listening_request=True
             story.approved=True; story.moderation_status='published'; story.public_consent=True
             story.privacy_review_complete=True; story.removed_at=None; story.published_at=story.published_at or timezone.now()
             # ListeningRequest.media and Story.public_media use the same configured

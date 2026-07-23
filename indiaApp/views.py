@@ -335,7 +335,27 @@ def stories(request):
     })
 
 def public_stories():
-    return Story.objects.filter(approved=True, moderation_status='published', public_consent=True, privacy_review_complete=True, removed_at__isnull=True).filter(Q(source_listening_request__isnull=True)|Q(source_listening_request__public_sharing_consent=True,source_listening_request__public_consent_withdrawn_at__isnull=True)).annotate(reaction_count=Count('reactions', distinct=True), comment_count=Count('comments', filter=Q(comments__approved=True,comments__status='approved',comments__removed_at__isnull=True), distinct=True)).order_by('-featured','-published_at','-created_at')
+    valid_source=Q(
+        source_was_listening_request=True,
+        source_listening_request__isnull=False,
+        source_listening_request__public_sharing_consent=True,
+        source_listening_request__public_consent_withdrawn_at__isnull=True,
+        source_listening_request__privacy_review_complete=True,
+        source_listening_request__safety_flag=False,
+        source_listening_request__publication_status='published',
+    )
+    independent=Q(source_was_listening_request=False,source_listening_request__isnull=True)
+    valid_content=Q(story_format='text')|~Q(public_media='')
+    return Story.objects.filter(
+        approved=True,
+        moderation_status='published',
+        public_consent=True,
+        privacy_review_complete=True,
+        removed_at__isnull=True,
+    ).filter(valid_source|independent).filter(valid_content).annotate(
+        reaction_count=Count('reactions', distinct=True),
+        comment_count=Count('comments', filter=Q(comments__approved=True,comments__status='approved',comments__removed_at__isnull=True), distinct=True),
+    ).order_by('-featured','-published_at','-created_at')
 
 def story_format_page(request, story_format):
     templates={'text':'stories/text_stories.html','voice':'stories/voice_stories.html','video':'stories/video_stories.html'}

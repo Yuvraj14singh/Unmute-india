@@ -215,7 +215,8 @@ class PetitionSystemTests(TestCase):
 
 class DedicatedStoryPageTests(TestCase):
     def public_story(self,slug,format_='text',topic='hope',body='Approved showcase story'):
-        return Story.objects.create(slug=slug,title=slug.replace('-',' ').title(),body=body,story_format=format_,topic=topic,approved=True,moderation_status='published',public_consent=True,privacy_review_complete=True)
+        media='' if format_ == 'text' else f'stories/{slug}.webm'
+        return Story.objects.create(slug=slug,title=slug.replace('-',' ').title(),body=body,story_format=format_,topic=topic,public_media=media,approved=True,moderation_status='published',public_consent=True,privacy_review_complete=True)
 
     def test_all_dedicated_story_routes_load(self):
         names=['stories','text_stories','voice_stories','video_stories','hope_stories','exam_pressure_stories','family_pressure_stories','college_life_stories','coaching_pressure_stories','protest_experience_stories']
@@ -308,6 +309,22 @@ class UnmutedVoicesUpgradeTests(TestCase):
         self.assertContains(response,'data-format="Text"')
         self.assertContains(response,'data-author=')
         self.assertContains(response,'data-excerpt=')
+
+    def test_feed_uses_compact_natural_height_shelves(self):
+        response=self.client.get(reverse('stories'))
+        self.assertContains(response,'Written Voices')
+        self.assertContains(response,'Audio Stories')
+        self.assertContains(response,'Video Stories')
+        css=Path('static/css/stories/feed_shelves.css').read_text()
+        self.assertIn('height: auto',css)
+        self.assertIn('align-items: start',css)
+        self.assertIn('-webkit-line-clamp: 2',css)
+        self.assertIn('-webkit-line-clamp: 4',css)
+        self.assertNotIn('min-height: 100vh',css)
+
+    def test_missing_media_story_does_not_render(self):
+        missing=Story.objects.create(slug='missing-audio',title='Broken audio card',body='No media',story_format='voice',approved=True,moderation_status='published',public_consent=True,privacy_review_complete=True)
+        self.assertNotContains(self.client.get(reverse('stories')),missing.title)
 
     def test_comments_styles_define_desktop_and_mobile_panel_constraints(self):
         source=(Path(__file__).resolve().parent.parent/'static/css/stories/comments.css').read_text()
@@ -464,6 +481,30 @@ class AdminPublicationWorkspaceTests(TestCase):
         self.assertIsNotNone(story.removed_at)
         self.assertTrue(ListeningRequest.objects.filter(pk=item.pk).exists())
         self.assertNotContains(self.client.get(reverse('voices_text')),'A reviewed public message.')
+
+    def test_deleting_source_archives_public_story_and_writes_audit(self):
+        item=self.request()
+        self.client.post(reverse('admin:indiaApp_listeningrequest_publish',args=[item.pk]))
+        item.refresh_from_db(); story_id=item.published_story_id
+        item.delete()
+        story=Story.objects.get(pk=story_id)
+        self.assertEqual(story.moderation_status,'archived')
+        self.assertFalse(story.approved)
+        self.assertIsNotNone(story.removed_at)
+        self.assertNotContains(self.client.get(reverse('stories')),story.title)
+        self.assertTrue(AuditLog.objects.filter(object_reference__contains=f'Story:{story_id}',action__contains='source ListeningRequest was deleted').exists())
+
+    def test_source_consent_safety_status_and_media_control_visibility(self):
+        item=self.request(kind='audio',message='',media=SimpleUploadedFile('voice.webm',b'audio',content_type='audio/webm'))
+        self.client.post(reverse('admin:indiaApp_listeningrequest_publish',args=[item.pk]))
+        item.refresh_from_db(); story=item.published_story
+        self.assertContains(self.client.get(reverse('voices_voice')),story.title)
+        item.safety_flag=True
+        item.save()
+        story.refresh_from_db(); item.refresh_from_db()
+        self.assertEqual(item.publication_status,'removed')
+        self.assertEqual(story.moderation_status,'archived')
+        self.assertNotContains(self.client.get(reverse('voices_voice')),story.title)
 
     def test_non_staff_cannot_use_publication_actions(self):
         self.client.logout()

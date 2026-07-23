@@ -6,9 +6,10 @@ from django.conf import settings
 from django.core.validators import FileExtensionValidator
 from django.db import models
 from django.db.models import Q
-from django.db.models.signals import pre_delete
+from django.db.models.signals import post_save, pre_delete
 from django.dispatch import receiver
 from django.urls import reverse
+from django.utils import timezone
 
 def private_upload(instance, filename):
     return f'private/{uuid.uuid4().hex}{os.path.splitext(filename)[1].lower()}'
@@ -77,9 +78,52 @@ class ListeningRequest(TimeStampedModel):
 
 @receiver(pre_delete, sender=ListeningRequest)
 def remove_published_story_with_submission(sender, instance, **kwargs):
-    """A deleted private submission must not leave its public copy behind."""
+    """Archive the public copy before SET_NULL can make it look independent."""
     if instance.published_story_id:
-        Story.objects.filter(pk=instance.published_story_id).delete()
+        Story.objects.filter(pk=instance.published_story_id).update(
+            approved=False,
+            moderation_status='archived',
+            removed_at=timezone.now(),
+            updated_at=timezone.now(),
+        )
+        AuditLog.objects.create(
+            action='Unpublished public Story because source ListeningRequest was deleted',
+            object_reference=f'ListeningRequest:{instance.pk}:Story:{instance.published_story_id}',
+        )
+
+@receiver(post_save, sender=ListeningRequest)
+def unpublish_story_when_source_becomes_ineligible(sender, instance, **kwargs):
+    if not instance.published_story_id:
+        return
+    has_content=bool(instance.message.strip()) if instance.kind == 'text' else bool(instance.media)
+    remains_public=(
+        instance.public_sharing_consent
+        and instance.public_consent_withdrawn_at is None
+        and instance.privacy_review_complete
+        and not instance.safety_flag
+        and instance.publication_status == 'published'
+        and has_content
+    )
+    if remains_public:
+        return
+    changed=Story.objects.filter(
+        pk=instance.published_story_id,
+        moderation_status='published',
+    ).update(
+        approved=False,
+        moderation_status='archived',
+        removed_at=timezone.now(),
+        updated_at=timezone.now(),
+    )
+    if changed:
+        type(instance).objects.filter(pk=instance.pk,publication_status='published').update(
+            publication_status='removed',
+            updated_at=timezone.now(),
+        )
+        AuditLog.objects.create(
+            action='Unpublished public Story because source became ineligible',
+            object_reference=f'ListeningRequest:{instance.pk}:Story:{instance.published_story_id}',
+        )
 
 class ConversationMessage(TimeStampedModel):
     request = models.ForeignKey(ListeningRequest, related_name='replies', on_delete=models.CASCADE)
@@ -116,6 +160,7 @@ class Story(TimeStampedModel):
     featured = models.BooleanField(default=False, db_index=True)
     thumbnail = models.ImageField(upload_to='story_thumbnails/', blank=True)
     is_demo = models.BooleanField(default=False, db_index=True)
+    source_was_listening_request = models.BooleanField(default=False, db_index=True, editable=False)
     def __str__(self): return self.title or f'{self.get_story_format_display()} story #{self.pk}'
     @property
     def is_public(self): return self.approved and self.moderation_status == 'published' and self.public_consent and self.privacy_review_complete and not self.removed_at
