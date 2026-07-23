@@ -6,6 +6,8 @@ from django.conf import settings
 from django.core.validators import FileExtensionValidator
 from django.db import models
 from django.db.models import Q
+from django.db.models.signals import pre_delete
+from django.dispatch import receiver
 from django.urls import reverse
 
 def private_upload(instance, filename):
@@ -72,6 +74,12 @@ class ListeningRequest(TimeStampedModel):
                     self.tracking_code = code
                     break
         super().save(*args, **kwargs)
+
+@receiver(pre_delete, sender=ListeningRequest)
+def remove_published_story_with_submission(sender, instance, **kwargs):
+    """A deleted private submission must not leave its public copy behind."""
+    if instance.published_story_id:
+        Story.objects.filter(pk=instance.published_story_id).delete()
 
 class ConversationMessage(TimeStampedModel):
     request = models.ForeignKey(ListeningRequest, related_name='replies', on_delete=models.CASCADE)

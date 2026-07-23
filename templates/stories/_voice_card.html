@@ -1,1 +1,32 @@
-<article class="story-card{% if story.story_format == 'video' %} video-story-card{% endif %}" data-format="{{ story.story_format }}" data-detail-url="{% url 'story_detail' story.slug %}" tabindex="{% if story.story_format == 'video' %}0{% else %}-1{% endif %}"><div class="story-meta"><span>{{ story.display_name|default:'Anonymous student' }}</span><span>✓ Moderated</span></div><small><time datetime="{{ story.published_at|default:story.created_at|date:'c' }}">{{ story.published_at|default:story.created_at|date:'d M Y · h:i A' }}</time></small><h3>{{ story.title|default:'What someone needed to say' }}</h3>{% if story.story_format == 'text' %}<p>{{ story.body|truncatewords:42 }}</p>{% elif story.story_format == 'voice' and story.public_media %}<audio controls preload="metadata" src="{{ story.public_media.url }}"></audio>{% elif story.story_format == 'video' and story.public_media %}<div class="video-card-player" data-video-player><video preload="metadata" playsinline muted src="{{ story.public_media.url }}"{% if story.thumbnail %} poster="{{ story.thumbnail.url }}"{% endif %}></video><div class="video-card-shade"></div><button class="video-play" type="button" aria-label="Play video">▶</button><button class="video-mute" type="button" aria-label="Unmute video" aria-pressed="true"><span aria-hidden="true">⌁</span><b>Muted</b></button><div class="video-progress" aria-hidden="true"><i></i></div><span class="video-time">00:00</span></div>{% else %}<p>{{ story.body|truncatewords:42 }}</p>{% endif %}<div class="badges"><span>{{ story.get_story_format_display }}</span><span>{{ story.get_comment_mode_display }}</span></div><a class="read-story" href="{% url 'story_detail' story.slug %}">Open full message →</a><div class="voice-social"><form action="{% url 'react' story.pk %}" method="post" data-reaction-form>{% csrf_token %}<button name="reaction" value="with_you" aria-pressed="false">♡ I hear you <span data-reaction-count>{{ story.reaction_count }}</span></button></form><button type="button" data-comments-open data-story="{{ story.pk }}" data-format="{{ story.get_story_format_display }}" data-title="{{ story.title|default:'What someone needed to say' }}" data-author="{{ story.display_name|default:'Anonymous student' }}" data-excerpt="{{ story.body|truncatewords:24|striptags }}"{% if story.public_media %} data-media="{{ story.public_media.url }}"{% endif %}>◯ Responses <span>{{ story.comment_count }}</span></button></div></article>
+<article class="story-card{% if story.story_format == 'video' %} video-story-card{% endif %}" data-format="{{ story.story_format }}" data-detail-url="{% url 'story_detail' story.slug %}" tabindex="{% if story.story_format == 'video' %}0{% else %}-1{% endif %}">
+  <div class="story-card__top">
+    <div class="story-meta"><span>{{ story.display_name|default:'Anonymous student' }}</span><span>✓ Moderated</span></div>
+    <small><time datetime="{{ story.published_at|default:story.created_at|date:'c' }}">{{ story.published_at|default:story.created_at|date:'d M Y · h:i A' }}</time></small>
+    <h3>{{ story.title|default:'What someone needed to say' }}</h3>
+  </div>
+  <div class="story-card__content">
+    {% if story.story_format == 'text' %}
+      <p>{{ story.body|truncatewords:32 }}</p>
+    {% elif story.story_format == 'voice' and story.public_media %}
+      <audio controls preload="metadata" src="{{ story.public_media.url }}"></audio>
+    {% elif story.story_format == 'video' and story.public_media %}
+      <div class="video-card-player" data-video-player>
+        <video preload="metadata" playsinline muted src="{{ story.public_media.url }}"{% if story.thumbnail %} poster="{{ story.thumbnail.url }}"{% endif %}></video>
+        <div class="video-card-shade"></div>
+        <button class="video-play" type="button" aria-label="Play video">▶</button>
+        <button class="video-mute" type="button" aria-label="Unmute video" aria-pressed="true"><span aria-hidden="true">⌁</span><b>Muted</b></button>
+        <div class="video-progress" aria-hidden="true"><i></i></div><span class="video-time">00:00</span>
+      </div>
+    {% else %}
+      <p>{{ story.body|truncatewords:32 }}</p>
+    {% endif %}
+  </div>
+  <div class="story-card__footer">
+    <div class="badges"><span>{% if story.story_format == 'text' %}Written{% else %}{{ story.get_story_format_display }}{% endif %}</span><span>{{ story.get_comment_mode_display }}</span></div>
+    <a class="read-story" href="{% url 'story_detail' story.slug %}">Open full message →</a>
+    <div class="voice-social">
+      <form action="{% url 'react' story.pk %}" method="post" data-reaction-form>{% csrf_token %}<button name="reaction" value="with_you" aria-pressed="false">♡ I hear you <span data-reaction-count>{{ story.reaction_count }}</span></button></form>
+      <button type="button" data-comments-open data-story="{{ story.pk }}" data-format="{{ story.get_story_format_display }}" data-title="{{ story.title|default:'What someone needed to say' }}" data-author="{{ story.display_name|default:'Anonymous student' }}" data-excerpt="{{ story.body|truncatewords:24|striptags }}"{% if story.public_media %} data-media="{{ story.public_media.url }}"{% endif %}>◯ Responses <span>{{ story.comment_count }}</span></button>
+    </div>
+  </div>
+</article>

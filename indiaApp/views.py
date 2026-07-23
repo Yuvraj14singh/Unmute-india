@@ -326,7 +326,13 @@ def safety(request):
 
 def stories(request):
     queryset = public_stories()
-    return render(request, 'stories/feed.html', {'stories':queryset[:12], 'featured_stories':queryset.filter(featured=True)[:3]})
+    return render(request, 'stories/feed.html', {
+        'written_stories': queryset.filter(story_format='text')[:4],
+        'audio_stories': queryset.filter(story_format='voice')[:4],
+        'video_stories': queryset.filter(story_format='video')[:4],
+        'has_public_stories': queryset.exists(),
+        'featured_stories': queryset.filter(featured=True)[:3],
+    })
 
 def public_stories():
     return Story.objects.filter(approved=True, moderation_status='published', public_consent=True, privacy_review_complete=True, removed_at__isnull=True).filter(Q(source_listening_request__isnull=True)|Q(source_listening_request__public_sharing_consent=True,source_listening_request__public_consent_withdrawn_at__isnull=True)).annotate(reaction_count=Count('reactions', distinct=True), comment_count=Count('comments', filter=Q(comments__approved=True,comments__status='approved',comments__removed_at__isnull=True), distinct=True)).order_by('-featured','-published_at','-created_at')
