@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   const mount=document.querySelector('#my-space-google');
   if(!config||!mount) return;
   const status=document.querySelector('[data-space-status]');
-  const csrf=document.cookie.match(/(?:^|; )csrftoken=([^;]+)/)?.[1]||'';
+  const csrf=document.querySelector('[data-space-sync-token] input[name="csrfmiddlewaretoken"]')?.value||'';
   const draw=()=>{
     if(!window.google?.accounts?.id) return setTimeout(draw,100);
     google.accounts.id.initialize({client_id:config.clientId,callback:async({credential})=>{

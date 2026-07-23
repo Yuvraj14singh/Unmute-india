@@ -405,7 +405,8 @@ class PrivateIdentitySystemTests(TestCase):
         page=browser.get(reverse('my_space'))
         self.assertEqual(page.status_code,200)
         self.assertIn('csrftoken',page.cookies)
-        token=page.cookies['csrftoken'].value
+        self.assertContains(page,'name="csrfmiddlewaretoken"')
+        token=str(page.context['csrf_token'])
         response=browser.post(
             reverse('my_space_google_sync'),
             {'credential':'credential','sync_consent':'1'},
