@@ -111,12 +111,15 @@ class PublicPageTests(TestCase):
         self.assertIn('use_fedcm_for_button: false', source)
         self.assertIn('itp_support: true', source)
         self.assertIn('googleShell.getBoundingClientRect().width', source)
+        self.assertIn('const googleUnavailable = !googleReady || submitting', source)
 
     def test_google_button_css_is_stable_and_clickable(self):
         source=(Path(__file__).resolve().parent.parent / 'static/css/accountability/petition_detail.css').read_text()
         self.assertIn('.google-button-shell>div,.google-button-shell iframe', source)
         self.assertIn('pointer-events:auto!important', source)
         self.assertIn('animation:none!important', source)
+        self.assertIn('isolation:isolate', source)
+        self.assertIn('.google-button-shell.is-disabled iframe', source)
 
 class PetitionSystemTests(TestCase):
     def setUp(self):

@@ -75,8 +75,12 @@ if (petitionForm) {
     steps.details?.classList.toggle('is-complete', detailsComplete);
     steps.human?.classList.toggle('is-complete', checks.turnstile_token);
     steps.google?.classList.toggle('is-active', detailsComplete && checks.turnstile_token);
-    googleShell.classList.toggle('is-disabled', !ready);
-    googleShell.setAttribute('aria-disabled', String(!ready));
+    // Keep the Google iframe's complete visual surface tappable. Disabling its
+    // parent while forcing pointer-events on the child produced a mismatched
+    // mobile hit area where only an overflowing edge received taps.
+    const googleUnavailable = !googleReady || submitting;
+    googleShell.classList.toggle('is-disabled', googleUnavailable);
+    googleShell.setAttribute('aria-disabled', String(googleUnavailable));
 
     if (!detailsComplete) {
       activeStep.textContent = 'Complete your details';
@@ -202,6 +206,7 @@ if (petitionForm) {
         click_listener: () => {
           status.className = 'form-response';
           status.textContent = '';
+          validate(true);
         },
       });
       googleButtonRendered = true;

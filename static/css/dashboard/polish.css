@@ -1,0 +1,224 @@
+.dash-head {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(3rem, 6vw, 5.5rem) 0 clamp(3rem, 6vw, 5rem);
+  isolation: isolate;
+}
+
+.dash-head::before,
+.dash-head::after {
+  position: absolute;
+  z-index: -1;
+  content: "";
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(2px);
+}
+
+.dash-head::before {
+  width: 34rem;
+  height: 34rem;
+  right: -10rem;
+  top: -16rem;
+  border: 1px solid #47d98c1f;
+  box-shadow: 0 0 0 70px #47d98c08, 0 0 0 140px #47d98c05;
+}
+
+.dash-head::after {
+  width: 28rem;
+  height: 28rem;
+  left: -18rem;
+  bottom: -20rem;
+  background: #0b6f5730;
+  filter: blur(80px);
+}
+
+.dash-shell {
+  width: min(1720px, calc(100% - clamp(2rem, 8vw, 10rem)));
+  margin-inline: auto;
+}
+
+.dash-title {
+  align-items: center;
+}
+
+.dash-title .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  margin: 0 0 1rem;
+  color: #a8cbbb;
+}
+
+.dash-title .eyebrow::before {
+  width: 30px;
+  height: 1px;
+  content: "";
+  background: #58c892;
+}
+
+.dash-title h1 {
+  max-width: 11ch;
+  margin: 0 0 .8rem;
+  font-size: clamp(4rem, 7vw, 7rem);
+  line-height: .92;
+  letter-spacing: -.045em;
+}
+
+.dash-title > div:first-child > p:last-child {
+  max-width: 720px;
+  margin: 0;
+  font-size: clamp(1rem, 1.5vw, 1.18rem);
+  line-height: 1.6;
+}
+
+.dash-actions {
+  min-width: max-content;
+}
+
+.dash-actions > * {
+  min-height: 52px;
+  box-sizing: border-box;
+}
+
+.dash-actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: .6rem;
+  padding-inline: 1.3rem;
+  box-shadow: 0 14px 35px #00181140;
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.dash-actions a:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 42px #00181166;
+}
+
+.dash-user {
+  display: inline-flex;
+  align-items: center;
+  gap: .65rem;
+  padding: .35rem .85rem .35rem .4rem !important;
+}
+
+.dash-user i {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 50%;
+  background: #ffffff16;
+  color: #bce4cc;
+  font: normal 700 .85rem Georgia, serif;
+}
+
+.dash-stats {
+  gap: clamp(.75rem, 1.4vw, 1.25rem);
+  margin-top: clamp(2.5rem, 5vw, 4.5rem);
+}
+
+.dash-stats article {
+  position: relative;
+  min-width: 0;
+  padding: 1.4rem 1.5rem 1.35rem;
+  overflow: hidden;
+  border-color: #b5d6c326;
+  background: linear-gradient(145deg, #ffffff0d, #ffffff05);
+  box-shadow: inset 0 1px #ffffff12, 0 16px 40px #00151b1c;
+  transition: transform .2s ease, border-color .2s ease;
+}
+
+.dash-stats article:hover {
+  transform: translateY(-3px);
+  border-color: #79bf9a55;
+}
+
+.dash-stats .stat-icon {
+  position: absolute;
+  right: 1.2rem;
+  top: 1.1rem;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid #8dc7a82d;
+  border-radius: 50%;
+  color: #9dcab4;
+  font-size: .8rem;
+}
+
+.dash-stats small {
+  padding-right: 42px;
+  font-size: .72rem;
+  font-weight: 800;
+}
+
+.dash-stats b {
+  margin: .45rem 0 .2rem;
+  font-size: clamp(2.5rem, 4vw, 3.4rem);
+  line-height: 1;
+}
+
+.dash-stats .alert .stat-icon {
+  border-color: #ff9b4866;
+  color: #ffab68;
+}
+
+.petition-workspace,
+.queue {
+  padding-inline: max(clamp(1.25rem, 6vw, 7.5rem), calc((100% - 1720px) / 2));
+}
+
+.petition-workspace {
+  background:
+    radial-gradient(circle at 10% 100%, #15905718, transparent 30%),
+    linear-gradient(135deg, #f2f0e8, #e7eee7);
+}
+
+[data-theme=dark] .petition-workspace {
+  background:
+    radial-gradient(circle at 10% 100%, #15905725, transparent 30%),
+    linear-gradient(135deg, #102621, #0a2628);
+}
+
+@media (max-width: 900px) {
+  .dash-shell {
+    width: min(100% - 2.5rem, 720px);
+  }
+
+  .dash-title h1 {
+    margin-top: .5rem;
+  }
+
+  .dash-actions {
+    min-width: 0;
+    margin-top: 1.6rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .dash-head {
+    padding-top: 2.5rem;
+  }
+
+  .dash-shell {
+    width: calc(100% - 2rem);
+  }
+
+  .dash-title h1 {
+    font-size: clamp(3.2rem, 17vw, 4.6rem);
+  }
+
+  .dash-actions {
+    align-items: stretch;
+  }
+
+  .dash-actions > * {
+    justify-content: center;
+  }
+
+  .dash-stats {
+    grid-template-columns: 1fr;
+  }
+}
