@@ -1,7 +1,6 @@
 from django.contrib import admin
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
-from django.core.files.base import ContentFile
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.http import HttpResponseRedirect
@@ -10,7 +9,10 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils import timezone
 from django.utils.text import slugify
+import logging
 from .models import *
+
+logger = logging.getLogger(__name__)
 
 @admin.register(ListeningRequest)
 class ListeningRequestAdmin(admin.ModelAdmin):
@@ -118,11 +120,13 @@ class ListeningRequestAdmin(admin.ModelAdmin):
             story.comment_mode=item.comment_preference
             story.approved=True; story.moderation_status='published'; story.public_consent=True
             story.privacy_review_complete=True; story.removed_at=None; story.published_at=story.published_at or timezone.now()
+            # ListeningRequest.media and Story.public_media use the same configured
+            # storage. Reuse the existing storage key instead of opening/copying a
+            # potentially large file. This is atomic, idempotent and works with
+            # Render filesystems as well as remote object-storage backends.
+            if item.media:
+                story.public_media.name=item.media.name
             story.save()
-            if item.media and not story.public_media:
-                item.media.open('rb')
-                story.public_media.save(item.media.name.rsplit('/',1)[-1],ContentFile(item.media.read()),save=True)
-                item.media.close()
             item.privacy_review_complete=True; item.publication_status='published'; item.published_story=story
             item.reviewed_by=request.user; item.reviewed_at=timezone.now()
             item.save(update_fields=('privacy_review_complete','publication_status','published_story','reviewed_by','reviewed_at','updated_at'))
@@ -200,7 +204,13 @@ class ListeningRequestAdmin(admin.ModelAdmin):
     def publish_view(self,request,object_id):
         item=get_object_or_404(ListeningRequest,pk=object_id)
         if request.method=='POST':
-            ok,message=self._publish(request,item); self.message_user(request,message,messages.SUCCESS if ok else messages.ERROR)
+            try:
+                ok,message=self._publish(request,item)
+            except Exception:
+                logger.exception('ListeningRequest publication failed request_id=%s kind=%s',item.pk,item.kind)
+                ok=False
+                message='This media could not be published safely. The private submission is unchanged; please retry or verify that its uploaded file is still available.'
+            self.message_user(request,message,messages.SUCCESS if ok else messages.ERROR)
             return HttpResponseRedirect(reverse('admin:indiaApp_listeningrequest_change',args=[item.pk]))
         return render(request,'admin/indiaApp/listeningrequest/confirm_action.html',{'item':item,'action_name':'Publish','prompt':'Approve this submission for public sharing?','warning':'This creates or restores one public Unmuted Voices post after privacy review.','opts':self.model._meta})
     def unpublish_view(self,request,object_id):

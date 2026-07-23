@@ -366,6 +366,18 @@ class AdminPublicationWorkspaceTests(TestCase):
         self.assertEqual([item.published_story.story_format for item in items],['text','voice','video'])
         self.assertContains(self.client.get(reverse('voices_text')),'A reviewed public message.')
         self.assertEqual(Story.objects.count(),3)
+        self.assertEqual(items[1].published_story.public_media.name,items[1].media.name)
+        self.assertEqual(items[2].published_story.public_media.name,items[2].media.name)
+
+    def test_audio_and_video_publish_without_reopening_or_copying_media(self):
+        for kind in ('audio','video'):
+            item=self.request(kind=kind,message='',media=SimpleUploadedFile(f'{kind}.webm',b'media-bytes',content_type=f'{kind}/webm'))
+            with patch('django.db.models.fields.files.FieldFile.open',side_effect=OSError('storage does not allow reopening')):
+                response=self.client.post(reverse('admin:indiaApp_listeningrequest_publish',args=[item.pk]))
+            self.assertEqual(response.status_code,302)
+            item.refresh_from_db()
+            self.assertEqual(item.publication_status,'published')
+            self.assertEqual(item.published_story.public_media.name,item.media.name)
 
     def test_repeated_publish_is_idempotent_and_audited(self):
         item=self.request()
