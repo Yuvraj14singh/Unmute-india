@@ -23,14 +23,17 @@
 
   const overlay=document.querySelector('[data-comments-overlay]');if(!overlay)return;
   const modal=overlay.querySelector('.comments-modal'),scroll=overlay.querySelector('.comments-scroll'),list=overlay.querySelector('[data-comments-list]'),status=overlay.querySelector('[data-comments-status]'),count=overlay.querySelector('[data-comments-count]'),compose=overlay.querySelector('[data-comment-compose]'),more=overlay.querySelector('[data-comments-more]'),replyBox=overlay.querySelector('[data-reply-context]'),reportSheet=overlay.querySelector('[data-report-sheet]'),reportForm=overlay.querySelector('[data-report-form]');
-  let storyId=null,page=1,lastFocus=null,reportFocus=null,submitting=false;
+  let storyId=null,page=1,lastFocus=null,reportFocus=null,submitting=false,commentsLoading=false,hasMoreComments=false;
 
   const responseMarkup=comment=>`<article class="response" data-comment="${comment.id}"><div class="response-main"><div class="response-avatar" aria-hidden="true">${esc(comment.name).charAt(0).toUpperCase()||'A'}</div><div class="response-content"><header><b>${esc(comment.name)}</b><time>${esc(comment.created)}</time></header><p>${esc(comment.body)}</p><div class="response-actions"><button data-comment-like="${comment.id}" aria-pressed="false">♡ Support <span>${comment.likes}</span></button><button data-reply="${comment.id}" data-reply-name="${esc(comment.name)}">Reply</button><button data-report="${comment.id}">Report</button></div></div></div>${comment.replies.length?`<div class="reply-thread">${comment.replies.map(reply=>`<article class="reply" data-comment="${reply.id}"><div class="response-avatar" aria-hidden="true">${esc(reply.name).charAt(0).toUpperCase()||'A'}</div><div class="response-content"><header><b>${esc(reply.name)}</b><time>${esc(reply.created)}</time></header><p>${esc(reply.body)}</p><div class="response-actions"><button data-comment-like="${reply.id}" aria-pressed="false">♡ Support <span>${reply.likes}</span></button><span class="reply-thread-label">Thread reply</span><button data-report="${reply.id}">Report</button></div></div></article>`).join('')}</div>`:''}</article>`;
 
   async function load(reset=false){
-    if(reset){page=1;list.innerHTML='<div class="comments-skeleton"><i></i><i></i><i></i></div>';status.textContent='Loading supportive responses…'}
-    try{const response=await fetch(`/stories/${storyId}/comments/?page=${page}`);const data=await response.json();if(!response.ok)throw Error();if(reset)list.innerHTML='';status.textContent='';count.textContent=`${data.count} response${data.count===1?'':'s'}`;document.querySelectorAll(`[data-comments-open][data-story="${storyId}"] span`).forEach(item=>item.textContent=data.count);if(!data.comments.length&&page===1)list.innerHTML='<div class="comments-empty"><span>◇</span><p>No supportive responses yet.</p><small>You can be the first to respond with care.</small></div>';else list.insertAdjacentHTML('beforeend',data.comments.map(responseMarkup).join(''));more.hidden=!data.has_next;compose.hidden=data.comments_mode==='none';if(data.comments_mode==='none')status.textContent='Comments are disabled for this post.'}
+    if(commentsLoading||(!reset&&!hasMoreComments))return;
+    commentsLoading=true;
+    if(reset){page=1;hasMoreComments=false;list.innerHTML='<div class="comments-skeleton"><i></i><i></i><i></i></div>';status.textContent='Loading supportive responses…'}
+    try{const response=await fetch(`/stories/${storyId}/comments/?page=${page}`);const data=await response.json();if(!response.ok)throw Error();if(reset)list.innerHTML='';status.textContent='';count.textContent=`${data.count} response${data.count===1?'':'s'}`;document.querySelectorAll(`[data-comments-open][data-story="${storyId}"] span`).forEach(item=>item.textContent=data.count);const fresh=data.comments.filter(comment=>!list.querySelector(`[data-comment="${comment.id}"]`));if(!data.comments.length&&page===1)list.innerHTML='<div class="comments-empty"><span>◇</span><p>No supportive responses yet.</p><small>You can be the first to respond with care.</small></div>';else if(fresh.length)list.insertAdjacentHTML('beforeend',fresh.map(responseMarkup).join(''));hasMoreComments=Boolean(data.has_next);more.hidden=!hasMoreComments;compose.hidden=data.comments_mode==='none';if(data.comments_mode==='none')status.textContent='Comments are disabled for this post.'}
     catch{status.textContent='Responses could not be loaded. Please try again.'}
+    finally{commentsLoading=false}
   }
   function setContext(button){
     overlay.querySelector('[data-comments-format]').textContent=button.dataset.format||'Post';
@@ -58,7 +61,7 @@
     if(event.target.closest('[data-report-close]'))return closeReport();
   });
   overlay.querySelector('[data-name-toggle]').addEventListener('click',event=>{const row=overlay.querySelector('[data-name-row]'),show=row.hidden;row.hidden=!show;event.currentTarget.setAttribute('aria-expanded',String(show));event.currentTarget.textContent=show?'Hide display name':'Add display name';if(show)row.querySelector('input').focus()});
-  more.addEventListener('click',()=>{page++;load()});
+  more.addEventListener('click',()=>{if(!hasMoreComments||commentsLoading)return;page++;load()});
   const composeBody=compose.querySelector('[name=body]');
   composeBody.addEventListener('input',()=>{composeBody.style.height='auto';composeBody.style.height=`${Math.min(composeBody.scrollHeight,112)}px`});
   composeBody.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();compose.requestSubmit()}});

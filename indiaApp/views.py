@@ -427,7 +427,14 @@ def story_comments(request, pk):
     public_filter=Q(approved=True,status='approved',removed_at__isnull=True)
     latest_top_ids=story.comments.filter(public_filter,parent__isnull=True).order_by().values('display_name','body').annotate(latest_id=Max('pk')).values('latest_id')
     comments=story.comments.filter(public_filter,parent__isnull=True,pk__in=Subquery(latest_top_ids)).annotate(like_count=Count('reactions')).prefetch_related('replies__reactions').order_by('-created_at')
-    page=Paginator(comments,15).get_page(request.GET.get('page'))
+    paginator=Paginator(comments,15)
+    try:
+        requested_page=max(1,int(request.GET.get('page',1)))
+    except (TypeError,ValueError):
+        requested_page=1
+    if requested_page > paginator.num_pages:
+        return JsonResponse({'ok':True,'comments':[],'count':comments.count(),'has_next':False,'comments_mode':story.comment_mode})
+    page=paginator.page(requested_page)
     def pack(c):
         seen=set(); replies=[]
         for reply in c.replies.filter(approved=True,status='approved',removed_at__isnull=True).order_by('created_at'):

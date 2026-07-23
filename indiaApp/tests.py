@@ -298,6 +298,17 @@ class UnmutedVoicesUpgradeTests(TestCase):
         self.assertEqual(comment.status,'approved')
         self.assertContains(self.client.get(reverse('story_comments',args=[self.story.pk])),'Thank you for sharing this.')
 
+    def test_comment_pagination_never_repeats_last_page(self):
+        StoryComment.objects.create(story=self.story,body='Only response',approved=True,status='approved')
+        first=self.client.get(reverse('story_comments',args=[self.story.pk]),{'page':1}).json()
+        beyond=self.client.get(reverse('story_comments',args=[self.story.pk]),{'page':2}).json()
+        self.assertEqual(len(first['comments']),1)
+        self.assertFalse(first['has_next'])
+        self.assertEqual(beyond['comments'],[])
+        self.assertFalse(beyond['has_next'])
+        css=Path('static/css/stories/comments.css').read_text()
+        self.assertIn('.comments-more[hidden]{display:none!important}',css)
+
     def test_video_card_uses_custom_controls_and_links_to_detail(self):
         self.story.story_format='video'
         self.story.public_media.name='stories/public-video.webm'

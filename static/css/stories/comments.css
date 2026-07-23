@@ -13,6 +13,7 @@
 
 /* Final containment overrides: keep the compact composer inside the dialog. */
 .comments-modal,.comments-composer,.composer-row,.composer-meta{min-width:0;box-sizing:border-box}
+.comments-more[hidden]{display:none!important}
 .comments-header h2{font:600 clamp(1.1rem,2vw,1.45rem)/1.2 Georgia,serif!important}
 .comments-scroll{padding-bottom:24px}
 .composer-row textarea{min-width:0;width:auto!important;box-sizing:border-box}

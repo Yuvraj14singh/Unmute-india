@@ -212,7 +212,7 @@
 
 /* iOS Safari fallback: never allow an inherited desktop grid on phones. */
 @media (max-width: 699px) {
-  .featured-feed .format-shelf .story-grid--shelf {
+  .featured-feed .story-grid.story-grid--shelf {
     display: grid;
     width: 100%;
     grid-template-columns: minmax(0, 1fr) !important;
@@ -232,7 +232,8 @@
 
   .story-card .story-meta span {
     min-width: 0;
-    overflow-wrap: anywhere;
+    overflow-wrap: normal;
+    word-break: normal;
   }
 
   .story-grid--shelf .voice-social {
@@ -252,5 +253,25 @@
     width: 100%;
     align-items: center;
     justify-content: center;
+  }
+
+  .featured-feed .story-grid--shelf .story-card {
+    padding: 1.2rem !important;
+    border-radius: 24px !important;
+  }
+
+  .featured-feed .story-grid--shelf .story-meta {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) auto;
+    font-size: .9rem;
+  }
+
+  .featured-feed .story-grid--shelf .story-meta span:last-child {
+    white-space: nowrap;
+  }
+
+  .featured-feed .story-grid--shelf .voice-social {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 }
