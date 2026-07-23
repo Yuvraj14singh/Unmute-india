@@ -1,1 +1,49 @@
-{% extends 'core/terms.html' %}
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Community Standards | Unmute India{% endblock %}
+{% block css %}<link rel="stylesheet" href="{% static 'css/core/guidelines.css' %}">{% endblock %}
+{% block content %}
+<header class="standards-hero">
+  <p class="standards-kicker">COMMUNITY STANDARDS</p>
+  <h1>Care needs more than good intentions.</h1>
+  <p>These standards protect private student voice, public conversations and evidence-led accountability across Unmute India.</p>
+  <nav><a href="#listening">Listening</a><a href="#privacy">Privacy</a><a href="#public">Public content</a><a href="#accountability">Accountability</a></nav>
+</header>
+
+<section class="standards-intro">
+  <div><p class="standards-kicker standards-kicker--green">THE SHARED PROMISE</p><h2>Listen before advising.<br>Protect before publishing.<br><em>Verify before claiming.</em></h2></div>
+  <div><p class="standards-large">Everyone using or supporting this platform shares responsibility for student dignity.</p><p>Students may arrive without perfect words. Volunteers may not have every answer. Public discussions may involve difficult issues. What matters is that every action stays respectful, privacy-aware and honest about its limits.</p></div>
+</section>
+
+<section class="standard-section" id="listening">
+  <div class="standard-heading"><span>01</span><div><p class="standards-kicker standards-kicker--green">PRIVATE LISTENING</p><h2>Respond like a person—not an authority.</h2></div></div>
+  <div class="rule-grid"><article><b>Do</b><h3>Listen without judgement</h3><p>Acknowledge what the student shared and let them choose how much to say.</p></article><article><b>Do</b><h3>Ask before advising</h3><p>Support may mean listening, helping with words or discussing one practical next step.</p></article><article class="avoid"><b>Avoid</b><h3>Diagnosis and certainty</h3><p>Do not diagnose, prescribe, interrogate or make promises you cannot keep.</p></article><article class="avoid"><b>Avoid</b><h3>Pressure to continue</h3><p>A student can pause, leave or decline advice at any time.</p></article></div>
+</section>
+
+<section class="privacy-standard" id="privacy">
+  <div><p class="standards-kicker">PRIVACY</p><h2>A private message stays private.</h2><p>Submitting something for support does not make it a public story. Public sharing is a separate choice with separate review.</p></div>
+  <ol><li><span>01</span><div><h3>Do not reveal identity</h3><p>Never expose names, contact details, institutions, locations or identifying context without a valid reason and clear permission.</p></div></li><li><span>02</span><div><h3>Use authorised workflows</h3><p>Private content must not be copied into personal messages, screenshots, outside documents or informal groups.</p></div></li><li><span>03</span><div><h3>Respect consent withdrawal</h3><p>When public-sharing consent is withdrawn, the public copy must be removed while protected records follow platform policy.</p></div></li></ol>
+</section>
+
+<section class="standard-section" id="public">
+  <div class="standard-heading"><span>02</span><div><p class="standards-kicker standards-kicker--green">UNMUTED VOICES & COMMENTS</p><h2>Public support must remain safe to receive.</h2></div></div>
+  <div class="public-rules"><div class="allowed"><h3>Welcome here</h3><ul><li>Supportive, relevant responses</li><li>Respectful disagreement without attacking a person</li><li>Experience shared without claiming it applies to everyone</li><li>Gentle encouragement and practical suggestions when invited</li></ul></div><div class="removed"><h3>Removed or restricted</h3><ul><li>Harassment, hate, threats or humiliation</li><li>Private or identifying information</li><li>Unsafe instructions, diagnosis or coercive advice</li><li>Spam, impersonation or repeated duplicate comments</li><li>Content encouraging violence or self-harm</li></ul></div></div>
+</section>
+
+<section class="accountability-standard" id="accountability">
+  <div><p class="standards-kicker">EVIDENCE & ACCOUNTABILITY</p><h2>A demand can be urgent without turning an allegation into a fact.</h2></div>
+  <div class="accountability-rules"><article><span>01</span><h3>Show the source</h3><p>Use accessible source links, dates, document context and verification status wherever possible.</p></article><article><span>02</span><h3>Separate fact and claim</h3><p>Describe allegations, demands, official records and opinions accurately.</p></article><article><span>03</span><h3>Stay peaceful</h3><p>No threats, targeted abuse, doxxing or encouragement of unlawful harm.</p></article><article><span>04</span><h3>Correct the record</h3><p>Update or remove material when credible new evidence changes the picture.</p></article></div>
+</section>
+
+<section class="volunteer-standard">
+  <div><p class="standards-kicker standards-kicker--green">VOLUNTEER BOUNDARIES</p><h2>Access is earned, limited and reviewable.</h2><p>Volunteer applications are reviewed before any role is assigned. Private access is never automatic and should be limited to what the role genuinely requires.</p></div>
+  <div><ul><li>Follow training and moderation decisions</li><li>Use only the permissions assigned to your role</li><li>Disclose conflicts or situations beyond your ability</li><li>Escalate safety concerns through the platform workflow</li><li>Never claim unverified professional qualifications</li></ul><a class="standards-button" href="{% url 'volunteer' %}">Volunteer Responsibly →</a></div>
+</section>
+
+<section class="report-standard">
+  <div><p class="standards-kicker">WHEN SOMETHING BREAKS THESE RULES</p><h2>Report it. Do not amplify it.</h2></div>
+  <div><p>Use the report option on public comments or contact Unmute India with the relevant link and a short explanation. Reports are reviewed; reporting does not guarantee a specific outcome.</p><div><a class="standards-button" href="{% url 'page' 'contact' %}">Contact Unmute India</a><a href="{% url 'page' 'privacy' %}">Read the Privacy Policy →</a><a href="{% url 'page' 'terms' %}">Read Terms of Use →</a></div></div>
+</section>
+
+<section class="standards-final"><p class="standards-kicker">THE SIMPLE VERSION</p><h2>Protect the person. Respect the story. Check the claim.</h2><a class="standards-button" href="{% url 'talk' %}">Share What You Feel</a></section>
+{% endblock %}

@@ -12,6 +12,14 @@ class ListeningRequestForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['comment_preference'].required = False
         self.fields['comment_preference'].initial = 'support'
+        kind = getattr(self.instance, 'kind', '')
+        accepts = {
+            'audio': 'audio/*,.mp3,.m4a,.wav,.ogg,.webm',
+            'image': 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp',
+            'video': 'video/*,.webm,.mp4,.mov',
+        }
+        if kind in accepts:
+            self.fields['media'].widget.attrs['accept'] = accepts[kind]
     def clean_media(self):
         file = self.cleaned_data.get('media')
         if file and file.size > 25 * 1024 * 1024:

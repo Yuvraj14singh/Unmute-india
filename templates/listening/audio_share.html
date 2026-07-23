@@ -13,7 +13,7 @@
     <form method="post" enctype="multipart/form-data">
       {% csrf_token %}
       {% if form.errors %}<div class="share-form-errors" role="alert"><strong>Please check the highlighted details:</strong><ul>{% for field in form %}{% for error in field.errors %}<li>{{ field.label }}: {{ error }}</li>{% endfor %}{% endfor %}{% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul></div>{% endif %}
-      <div class="upload-zone"><span class="upload-icon" aria-hidden="true">↑</span><b>Upload an existing audio file</b><small>MP3, M4A, WAV, OGG or WEBM · up to 25 MB</small><label class="pill" for="id_media">Choose audio file</label>{{ form.media }}<span data-file-details>No file selected</span><button type="button" data-remove-file hidden>Remove</button>{{ form.media.errors }}</div>
+      <div class="upload-zone"><span class="upload-icon" aria-hidden="true">↑</span><b>Upload an existing audio file</b><small>MP3, M4A, WAV, OGG or WEBM · up to 25 MB</small><label class="pill" for="id_media">Choose audio file</label>{{ form.media }}<span data-file-details>No file selected</span><button type="button" data-remove-file hidden>Remove</button>{{ form.media.errors }}<small>From Google Drive: wait for the file to finish downloading in the picker, then keep this page open until “sent” appears.</small></div>
       <div hidden>{{ form.message }}</div>
       <div class="choice-checks">
         <label class="check">{{ form.anonymous }} <span>Keep me anonymous</span></label>
