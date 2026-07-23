@@ -13,6 +13,7 @@ from django.templatetags.static import static
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import ensure_csrf_cookie
 import hashlib, json, logging, secrets
 from urllib import parse, request as urllib_request
 from .forms import GooglePetitionSupportForm, ListeningRequestForm, PetitionSignatureForm, PublicQuestionForm, VolunteerForm
@@ -534,6 +535,7 @@ def comment_report(request, pk):
     _,created=CommentReport.objects.get_or_create(comment=comment,session_key_hash=_session_hash(request),defaults={'reason':reason,'details':request.POST.get('details','')[:500]})
     return JsonResponse({'ok':True,'message':'Thank you. Staff will review this response.','created':created})
 
+@ensure_csrf_cookie
 def my_space(request):
     identity=request.private_identity
     guest_submissions=ListeningRequest.objects.none()

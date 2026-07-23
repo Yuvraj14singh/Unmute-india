@@ -19,6 +19,10 @@ document.addEventListener('DOMContentLoaded',()=>{
       const body=new URLSearchParams({credential,sync_consent:'1'});
       try{
         const response=await fetch(config.url,{method:'POST',headers:{'X-CSRFToken':decodeURIComponent(csrf),'X-Requested-With':'XMLHttpRequest'},body});
+        const contentType=response.headers.get('content-type')||'';
+        if(!contentType.includes('application/json')){
+          throw new Error(response.status===403?'Your secure session expired. Refresh this page and try again.':'Private activity could not be restored right now. Please try again.');
+        }
         const data=await response.json();
         if(!response.ok) throw new Error(data.message||'Verification failed.');
         location.assign(data.redirect);

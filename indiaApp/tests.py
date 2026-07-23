@@ -398,6 +398,22 @@ class PrivateIdentitySystemTests(TestCase):
         self.assertNotEqual(self.client.session.session_key,old_key)
         self.assertNotIn('raw-token',str(PrivateIdentity.objects.values().first()))
 
+    @patch('indiaApp.views._verify_google_credential')
+    def test_my_space_page_issues_csrf_cookie_for_google_callback(self, verify):
+        verify.return_value={'sub':'csrf-restore','email':'csrf@example.com','issuer':'accounts.google.com'}
+        browser=Client(enforce_csrf_checks=True)
+        page=browser.get(reverse('my_space'))
+        self.assertEqual(page.status_code,200)
+        self.assertIn('csrftoken',page.cookies)
+        token=page.cookies['csrftoken'].value
+        response=browser.post(
+            reverse('my_space_google_sync'),
+            {'credential':'credential','sync_consent':'1'},
+            HTTP_X_CSRFTOKEN=token,
+        )
+        self.assertEqual(response.status_code,200)
+        self.assertTrue(response.json()['ok'])
+
     def test_cross_device_reaction_state_and_toggle(self):
         identity=resolve_google_identity('cross-device','cross@example.com',consent=True)
         story=self.public_story()
