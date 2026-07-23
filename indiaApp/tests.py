@@ -1,14 +1,14 @@
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from unittest.mock import patch
 from pathlib import Path
 import tempfile
 from .forms import GooglePetitionSupportForm
-from .models import AuditLog, CommentReaction, CommentReport, ListeningRequest, Petition, PetitionSignature, PublicQuestion, Story, StoryComment
+from .models import AuditLog, CommentReaction, CommentReport, ListeningRequest, Petition, PetitionSignature, PublicQuestion, Story, StoryComment, StoryReaction
 from .utils import compact_count
 
 class PublicPageTests(TestCase):
@@ -252,12 +252,55 @@ class DedicatedStoryPageTests(TestCase):
         for name in ('stories','text_stories','hope_stories'):
             response=self.client.get(reverse(name)); self.assertNotContains(response,'Sensitive private content'); self.assertNotContains(response,'No consent content')
 
-    def test_duplicate_reaction_is_prevented(self):
+    def test_story_reaction_toggles_for_same_anonymous_browser(self):
         story=self.public_story('reaction-story')
         url=reverse('react',args=[story.pk])
-        self.client.post(url,{'reaction':'with_you','next':reverse('stories')})
-        self.client.post(url,{'reaction':'with_you','next':reverse('stories')})
-        self.assertEqual(story.reactions.count(),1)
+        added=self.client.post(url,{'reaction':'with_you','json':'1'},HTTP_X_REQUESTED_WITH='XMLHttpRequest').json()
+        self.assertTrue(added['active']); self.assertEqual(added['count'],1)
+        removed=self.client.post(url,{'reaction':'with_you','json':'1'},HTTP_X_REQUESTED_WITH='XMLHttpRequest').json()
+        self.assertFalse(removed['active']); self.assertEqual(removed['count'],0)
+        self.assertEqual(story.reactions.count(),0)
+
+    def test_different_anonymous_browsers_can_react_and_state_renders(self):
+        story=self.public_story('two-browser-reaction')
+        url=reverse('react',args=[story.pk])
+        first=self.client
+        second=self.client_class()
+        first.post(url,{'json':'1'},HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        second.post(url,{'json':'1'},HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(StoryReaction.objects.filter(story=story).count(),2)
+        response=first.get(reverse('voices_text'))
+        self.assertContains(response,'aria-pressed="true"')
+        self.assertContains(response,'data-reaction-count aria-live="polite">2')
+
+    def test_unpublished_story_reaction_rejected_and_get_does_not_mutate(self):
+        story=self.public_story('not-reactable')
+        url=reverse('react',args=[story.pk])
+        self.assertEqual(self.client.get(url).status_code,405)
+        self.assertFalse(StoryReaction.objects.exists())
+        story.moderation_status='archived'; story.approved=False; story.removed_at=timezone.now(); story.save()
+        self.assertEqual(self.client.post(url,{'json':'1'}).status_code,404)
+        self.assertFalse(StoryReaction.objects.exists())
+
+    def test_anonymous_cookie_is_private_and_database_stores_only_its_hmac(self):
+        story=self.public_story('private-cookie-reaction')
+        response=self.client.post(reverse('react',args=[story.pk]),{'json':'1'})
+        cookie=response.cookies['unmute_anonymous_id']
+        raw_identifier=cookie.value
+        reaction=StoryReaction.objects.get(story=story)
+        self.assertTrue(cookie['httponly'])
+        self.assertEqual(cookie['samesite'],'Lax')
+        self.assertEqual(int(cookie['max-age']),365 * 24 * 60 * 60)
+        self.assertNotEqual(reaction.anonymous_key,raw_identifier)
+        self.assertNotIn(raw_identifier,reaction.anonymous_key)
+        self.assertEqual(len(reaction.anonymous_key),64)
+
+    def test_story_reaction_requires_csrf_token(self):
+        story=self.public_story('csrf-reaction')
+        csrf_client=Client(enforce_csrf_checks=True)
+        response=csrf_client.post(reverse('react',args=[story.pk]),{'json':'1'})
+        self.assertEqual(response.status_code,403)
+        self.assertFalse(StoryReaction.objects.exists())
 
     def test_comments_follow_owner_preference(self):
         story=self.public_story('comments-closed'); story.comment_mode='none'; story.save()
@@ -309,6 +352,29 @@ class UnmutedVoicesUpgradeTests(TestCase):
         css=Path('static/css/stories/comments.css').read_text()
         self.assertIn('.comments-more[hidden]{display:none!important}',css)
 
+    def test_response_support_toggles_and_persists_per_browser(self):
+        comment=StoryComment.objects.create(story=self.story,body='Support me',approved=True,status='approved')
+        url=reverse('comment_react',args=[comment.pk])
+        added=self.client.post(url).json()
+        self.assertTrue(added['active']); self.assertEqual(added['count'],1)
+        payload=self.client.get(reverse('story_comments',args=[self.story.pk])).json()
+        self.assertTrue(payload['comments'][0]['active'])
+        removed=self.client.post(url).json()
+        self.assertFalse(removed['active']); self.assertEqual(removed['count'],0)
+        self.assertEqual(CommentReaction.objects.filter(comment=comment).count(),0)
+
+    def test_different_browsers_support_response_independently(self):
+        comment=StoryComment.objects.create(story=self.story,body='Two supporters',approved=True,status='approved')
+        url=reverse('comment_react',args=[comment.pk])
+        self.client.post(url)
+        self.client_class().post(url)
+        self.assertEqual(CommentReaction.objects.filter(comment=comment).count(),2)
+
+    def test_removed_response_cannot_receive_support(self):
+        comment=StoryComment.objects.create(story=self.story,body='Removed',approved=False,status='removed',removed_at=timezone.now())
+        self.assertEqual(self.client.post(reverse('comment_react',args=[comment.pk])).status_code,404)
+        self.assertFalse(CommentReaction.objects.exists())
+
     def test_video_card_uses_custom_controls_and_links_to_detail(self):
         self.story.story_format='video'
         self.story.public_media.name='stories/public-video.webm'
@@ -327,6 +393,9 @@ class UnmutedVoicesUpgradeTests(TestCase):
             self.assertContains(response,'comments-composer')
             self.assertContains(response,'data-reply-context')
             self.assertContains(response,'data-report-sheet')
+            self.assertContains(response,'data-name-sheet')
+            self.assertContains(response,'Choose display name')
+            self.assertContains(response,'Stay anonymous')
 
     def test_comment_openers_carry_compact_post_context(self):
         response=self.client.get(reverse('voices_text'))

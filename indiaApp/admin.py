@@ -374,7 +374,30 @@ class CommentReportAdmin(admin.ModelAdmin):
     list_filter=('reason','status')
     readonly_fields=('comment','reason','details','session_key_hash','created_at','updated_at')
 
-admin.site.register([UserProfile, ListenerProfile, ConversationMessage, StoryReaction, CommentReaction, AccountabilityEvent, EvidenceDocument, PublicQuestion, PromiseTracker, AuthorityResponse, SupportResource, VolunteerApplication, AuditLog])
+@admin.register(StoryReaction)
+class StoryReactionAdmin(admin.ModelAdmin):
+    list_display=('story','reaction','identity_type','anonymous_hash','created_at')
+    list_filter=('reaction','created_at')
+    search_fields=('story__title',)
+    readonly_fields=('story','reaction','identity_type','anonymous_hash','created_at','updated_at')
+    exclude=('session_key','anonymous_key')
+    @admin.display(description='Identity')
+    def identity_type(self,obj): return 'Anonymous browser' if obj.anonymous_key else 'Legacy session'
+    @admin.display(description='Anonymous hash')
+    def anonymous_hash(self,obj):
+        value=obj.anonymous_key or obj.session_key
+        return f'{value[:10]}…' if value else 'Legacy'
+
+@admin.register(CommentReaction)
+class CommentReactionAdmin(admin.ModelAdmin):
+    list_display=('comment','anonymous_hash','created_at')
+    search_fields=('comment__body','comment__story__title')
+    readonly_fields=('comment','anonymous_hash','created_at','updated_at')
+    exclude=('session_key_hash',)
+    @admin.display(description='Anonymous hash')
+    def anonymous_hash(self,obj): return f'{obj.session_key_hash[:10]}…'
+
+admin.site.register([UserProfile, ListenerProfile, ConversationMessage, AccountabilityEvent, EvidenceDocument, PublicQuestion, PromiseTracker, AuthorityResponse, SupportResource, VolunteerApplication, AuditLog])
 admin.site.site_header = 'Unmute India moderation'
 admin.site.site_title = 'Unmute India Staff'
 admin.site.index_title = 'Moderation and platform operations'

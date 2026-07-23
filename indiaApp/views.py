@@ -4,7 +4,7 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.core.exceptions import ImproperlyConfigured
 from django.db import IntegrityError, transaction
-from django.db.models import Count, F, Max, Q, Subquery
+from django.db.models import BooleanField, Count, Exists, F, Max, OuterRef, Prefetch, Q, Subquery, Value
 from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -75,7 +75,7 @@ def _verify_google_credential(credential):
     }
 
 def home(request):
-    return render(request, 'core/home.html', {'stories': public_stories()[:3], 'events': AccountabilityEvent.objects.order_by('-event_date')[:3], 'featured_petition':Petition.objects.filter(petition_status='published',is_featured=True).order_by('-published_at').first()})
+    return render(request, 'core/home.html', {'stories': public_stories(request.anonymous_reaction_key)[:3], 'events': AccountabilityEvent.objects.order_by('-event_date')[:3], 'featured_petition':Petition.objects.filter(petition_status='published',is_featured=True).order_by('-published_at').first()})
 
 def simple_page(request, page):
     allowed = {'about','privacy','terms','guidelines','contact','support','help-me-say-it','accountability','evidence','petition'}
@@ -297,7 +297,7 @@ def petition_resend(request, slug):
     return JsonResponse({'ok':False,'message':'Email verification has been discontinued. Please use Google verification on the petition page.'}, status=410)
 
 def talk(request):
-    return render(request, 'listening/start.html', {'stories': public_stories()[:3]})
+    return render(request, 'listening/start.html', {'stories': public_stories(request.anonymous_reaction_key)[:3]})
 
 def share(request, kind='text'):
     if kind not in {'text','audio','video'}: kind = 'text'
@@ -325,7 +325,7 @@ def safety(request):
     return render(request, 'support/safety.html', {'resources':SupportResource.objects.filter(verified=True)})
 
 def stories(request):
-    queryset = public_stories()
+    queryset = public_stories(request.anonymous_reaction_key)
     return render(request, 'stories/feed.html', {
         'written_stories': queryset.filter(story_format='text')[:4],
         'audio_stories': queryset.filter(story_format='voice')[:4],
@@ -334,7 +334,7 @@ def stories(request):
         'featured_stories': queryset.filter(featured=True)[:3],
     })
 
-def public_stories():
+def public_stories(anonymous_key=''):
     valid_source=Q(
         source_was_listening_request=True,
         source_listening_request__isnull=False,
@@ -346,6 +346,7 @@ def public_stories():
     )
     independent=Q(source_was_listening_request=False,source_listening_request__isnull=True)
     valid_content=Q(story_format='text')|~Q(public_media='')
+    visitor_reaction=StoryReaction.objects.filter(story=OuterRef('pk'),anonymous_key=anonymous_key,reaction='with_you')
     return Story.objects.filter(
         approved=True,
         moderation_status='published',
@@ -354,13 +355,14 @@ def public_stories():
         removed_at__isnull=True,
     ).filter(valid_source|independent).filter(valid_content).annotate(
         reaction_count=Count('reactions', distinct=True),
+        has_current_visitor_reacted=Exists(visitor_reaction) if anonymous_key else Value(False,output_field=BooleanField()),
         comment_count=Count('comments', filter=Q(comments__approved=True,comments__status='approved',comments__removed_at__isnull=True), distinct=True),
     ).order_by('-featured','-published_at','-created_at')
 
 def story_format_page(request, story_format):
     templates={'text':'stories/text_stories.html','voice':'stories/voice_stories.html','video':'stories/video_stories.html'}
     if story_format not in templates: return redirect('stories')
-    queryset=public_stories().filter(story_format=story_format)
+    queryset=public_stories(request.anonymous_reaction_key).filter(story_format=story_format)
     available_dates=sorted({
         timezone.localdate(item.published_at or item.created_at)
         for item in queryset.only('published_at','created_at')
@@ -397,13 +399,13 @@ TOPIC_PAGES={
 def story_topic_page(request, topic):
     if topic not in TOPIC_PAGES: return redirect('stories')
     template,title=TOPIC_PAGES[topic]
-    queryset=public_stories().filter(topic=topic)
+    queryset=public_stories(request.anonymous_reaction_key).filter(topic=topic)
     page=Paginator(queryset,9).get_page(request.GET.get('page'))
     return render(request,template,{'page_obj':page,'stories':page.object_list,'featured':queryset.first(),'text_stories':queryset.filter(story_format='text')[:4],'voice_stories':queryset.filter(story_format='voice')[:3],'video_stories':queryset.filter(story_format='video')[:3],'topic_title':title,'topic_key':topic})
 
 def story_detail(request, slug):
-    story = get_object_or_404(public_stories(), slug=slug)
-    related=public_stories().filter(topic=story.topic).exclude(pk=story.pk)[:3]
+    story = get_object_or_404(public_stories(request.anonymous_reaction_key), slug=slug)
+    related=public_stories(request.anonymous_reaction_key).filter(topic=story.topic).exclude(pk=story.pk)[:3]
     public_filter=Q(approved=True,status='approved',removed_at__isnull=True)
     latest_ids=story.comments.filter(public_filter,parent__isnull=True).order_by().values('display_name','body').annotate(latest_id=Max('pk')).values('latest_id')
     comments=story.comments.filter(public_filter,parent__isnull=True,pk__in=Subquery(latest_ids)).prefetch_related('replies').order_by('-created_at')
@@ -423,10 +425,18 @@ def _rate_limited(request, key, limit, window_seconds):
     return limited
 
 def story_comments(request, pk):
-    story=get_object_or_404(public_stories(),pk=pk)
+    story=get_object_or_404(public_stories(request.anonymous_reaction_key),pk=pk)
     public_filter=Q(approved=True,status='approved',removed_at__isnull=True)
     latest_top_ids=story.comments.filter(public_filter,parent__isnull=True).order_by().values('display_name','body').annotate(latest_id=Max('pk')).values('latest_id')
-    comments=story.comments.filter(public_filter,parent__isnull=True,pk__in=Subquery(latest_top_ids)).annotate(like_count=Count('reactions')).prefetch_related('replies__reactions').order_by('-created_at')
+    visitor_support=CommentReaction.objects.filter(comment=OuterRef('pk'),session_key_hash=request.anonymous_reaction_key)
+    public_replies=StoryComment.objects.filter(public_filter).annotate(
+        visitor_supported=Exists(visitor_support),
+        like_count=Count('reactions'),
+    ).order_by('created_at')
+    comments=story.comments.filter(public_filter,parent__isnull=True,pk__in=Subquery(latest_top_ids)).annotate(
+        like_count=Count('reactions'),
+        visitor_supported=Exists(visitor_support),
+    ).prefetch_related(Prefetch('replies',queryset=public_replies,to_attr='public_replies')).order_by('-created_at')
     paginator=Paginator(comments,15)
     try:
         requested_page=max(1,int(request.GET.get('page',1)))
@@ -437,18 +447,18 @@ def story_comments(request, pk):
     page=paginator.page(requested_page)
     def pack(c):
         seen=set(); replies=[]
-        for reply in c.replies.filter(approved=True,status='approved',removed_at__isnull=True).order_by('created_at'):
+        for reply in c.public_replies:
             key=((reply.display_name or '').casefold(),' '.join(reply.body.split()).casefold())
             if key in seen: continue
-            seen.add(key); replies.append({'id':reply.pk,'name':reply.display_name or 'Anonymous student','body':reply.body,'created':timezone.localtime(reply.created_at).strftime('%d %b %Y · %I:%M %p'),'likes':reply.reactions.count()})
-        return {'id':c.pk,'name':c.display_name or 'Anonymous student','body':c.body,'created':timezone.localtime(c.created_at).strftime('%d %b %Y · %I:%M %p'),'likes':getattr(c,'like_count',c.reactions.count()),'replies':replies}
+            seen.add(key); replies.append({'id':reply.pk,'name':reply.display_name or 'Anonymous student','body':reply.body,'created':timezone.localtime(reply.created_at).strftime('%d %b %Y · %I:%M %p'),'likes':reply.like_count,'active':reply.visitor_supported})
+        return {'id':c.pk,'name':c.display_name or 'Anonymous student','body':c.body,'created':timezone.localtime(c.created_at).strftime('%d %b %Y · %I:%M %p'),'likes':c.like_count,'active':c.visitor_supported,'replies':replies}
     unique_count=story.comments.filter(public_filter).order_by().values('parent_id','display_name','body').distinct().count()
     return JsonResponse({'ok':True,'comments':[pack(c) for c in page.object_list],'count':unique_count,'has_next':page.has_next(),'comments_mode':story.comment_mode})
 
 @require_POST
 def story_comment(request, pk):
     if _rate_limited(request,'comment',5,600): return JsonResponse({'ok':False,'message':'Please wait before sending another response.'},status=429)
-    story=get_object_or_404(public_stories(),pk=pk)
+    story=get_object_or_404(public_stories(request.anonymous_reaction_key),pk=pk)
     if story.comment_mode=='none': return JsonResponse({'ok':False,'message':'Comments are disabled for this story.'},status=403)
     body=request.POST.get('body','').strip()
     if len(body)<3 or len(body)>800: return JsonResponse({'ok':False,'message':'Please write a meaningful response between 3 and 800 characters.'},status=400)
@@ -466,15 +476,17 @@ def story_comment(request, pk):
 @require_POST
 def react(request, pk):
     if _rate_limited(request,'post-reaction',30,60): return JsonResponse({'ok':False,'message':'Please slow down.'},status=429)
-    story = get_object_or_404(public_stories(), pk=pk)
-    session=_session_hash(request)[:40]
-    existing=StoryReaction.objects.filter(story=story,session_key=session,reaction='with_you')
-    toggle=request.headers.get('x-requested-with')=='XMLHttpRequest' or request.POST.get('json')
-    active=not existing.exists()
-    if active: StoryReaction.objects.create(story=story,session_key=session,reaction='with_you')
-    elif toggle: existing.delete(); active=False
-    else: active=True
-    count=story.reactions.count()
+    public_story=get_object_or_404(public_stories(request.anonymous_reaction_key),pk=pk)
+    with transaction.atomic():
+        story=Story.objects.select_for_update().get(pk=public_story.pk)
+        existing=StoryReaction.objects.filter(story=story,anonymous_key=request.anonymous_reaction_key,reaction='with_you').first()
+        if existing:
+            existing.delete()
+            active=False
+        else:
+            StoryReaction.objects.create(story=story,session_key=request.anonymous_reaction_key[:40],anonymous_key=request.anonymous_reaction_key,reaction='with_you')
+            active=True
+        count=StoryReaction.objects.filter(story=story).count()
     if request.headers.get('x-requested-with')=='XMLHttpRequest' or request.POST.get('json'):
         return JsonResponse({'ok':True,'active':active,'count':count})
     return redirect(request.POST.get('next') or 'stories')
@@ -482,11 +494,17 @@ def react(request, pk):
 @require_POST
 def comment_react(request, pk):
     if _rate_limited(request,'comment-reaction',30,60): return JsonResponse({'ok':False,'message':'Please slow down.'},status=429)
-    comment=get_object_or_404(StoryComment,pk=pk,approved=True,status='approved',removed_at__isnull=True)
-    token=_session_hash(request)
-    reaction,created=CommentReaction.objects.get_or_create(comment=comment,session_key_hash=token)
-    if not created: reaction.delete()
-    return JsonResponse({'ok':True,'active':created,'count':comment.reactions.count()})
+    with transaction.atomic():
+        comment=get_object_or_404(StoryComment.objects.select_for_update(),pk=pk,approved=True,status='approved',removed_at__isnull=True,story__in=public_stories(request.anonymous_reaction_key))
+        reaction=CommentReaction.objects.filter(comment=comment,session_key_hash=request.anonymous_reaction_key).first()
+        if reaction:
+            reaction.delete()
+            active=False
+        else:
+            CommentReaction.objects.create(comment=comment,session_key_hash=request.anonymous_reaction_key)
+            active=True
+        count=CommentReaction.objects.filter(comment=comment).count()
+    return JsonResponse({'ok':True,'active':active,'count':count})
 
 @require_POST
 def comment_report(request, pk):

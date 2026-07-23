@@ -169,9 +169,13 @@ class StoryReaction(TimeStampedModel):
     REACTIONS = [('with_you','I am with you'),('not_alone','You are not alone'),('listening','I am listening'),('valid','Your feelings are valid'),('strength','Sending strength'),('attention','This needs attention')]
     story = models.ForeignKey(Story, related_name='reactions', on_delete=models.CASCADE)
     session_key = models.CharField(max_length=40)
+    anonymous_key = models.CharField(max_length=64, blank=True, db_index=True)
     reaction = models.CharField(max_length=16, choices=REACTIONS)
     class Meta:
-        constraints = [models.UniqueConstraint(fields=['story','session_key','reaction'], name='unique_story_reaction')]
+        constraints = [
+            models.UniqueConstraint(fields=['story','session_key','reaction'], name='unique_story_reaction'),
+            models.UniqueConstraint(fields=['story','anonymous_key','reaction'], condition=~Q(anonymous_key=''), name='unique_anonymous_story_reaction'),
+        ]
 
 class StoryComment(TimeStampedModel):
     STATUSES = [('pending','Pending'),('approved','Approved'),('rejected','Rejected'),('spam','Spam'),('removed','Removed')]

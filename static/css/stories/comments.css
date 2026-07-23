@@ -14,6 +14,22 @@
 /* Final containment overrides: keep the compact composer inside the dialog. */
 .comments-modal,.comments-composer,.composer-row,.composer-meta{min-width:0;box-sizing:border-box}
 .comments-more[hidden]{display:none!important}
+.name-sheet{position:absolute;z-index:6;left:50%;top:50%;translate:-50% -50%;width:min(440px,calc(100vw - 32px));padding:22px;border:1px solid #31513d3b;border-radius:24px;background:var(--paper);color:var(--ink);box-shadow:0 30px 90px #001017bb}
+.name-sheet[hidden]{display:none}
+.name-sheet>header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
+.name-sheet header span{display:block;margin-bottom:4px;color:var(--green);font-size:.64rem;font-weight:900;letter-spacing:.14em}
+.name-sheet h3{margin:0;font:600 1.45rem/1.15 Georgia,serif}
+.name-sheet header button{display:grid;flex:0 0 40px;width:40px;height:40px;place-items:center;border:1px solid #31513d2e;border-radius:50%;background:transparent;color:inherit;font-size:1.45rem}
+.name-sheet>p{margin:14px 0 18px;color:var(--muted);font-size:.84rem;line-height:1.55}
+.name-sheet form label{display:block;margin-bottom:6px;font-size:.78rem;font-weight:850}
+.name-sheet form input{min-height:48px;padding:10px 13px;border:1px solid #31513d45;border-radius:13px;background:transparent;color:inherit}
+.name-sheet form small{display:block;margin-top:7px;color:var(--muted);font-size:.7rem;line-height:1.45}
+.name-sheet form>div{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+.name-sheet form>div button{min-height:42px;padding:7px 12px;border:0;border-radius:11px}
+.name-sheet form>div button:first-child{background:transparent;color:var(--muted)}
+[data-theme=dark] .name-sheet{background:#0a2528;color:#edf3e9}
+[data-theme=dark] .name-sheet form input{background:#0f3031;border-color:#53706955}
+@media(max-width:600px){.name-sheet{top:auto;bottom:8px;translate:-50% 0;width:calc(100% - 12px);border-radius:22px}.name-sheet form>div{display:grid;grid-template-columns:1fr 1fr}.name-sheet form>div button{width:100%}}
 .comments-header h2{font:600 clamp(1.1rem,2vw,1.45rem)/1.2 Georgia,serif!important}
 .comments-scroll{padding-bottom:24px}
 .composer-row textarea{min-width:0;width:auto!important;box-sizing:border-box}
@@ -21,3 +37,7 @@
 .composer-meta{flex-wrap:wrap}
 .composer-meta label{max-width:100%;overflow-wrap:anywhere}
 .response-actions button span{margin-left:4px}
+.response-actions .response-support-button{gap:6px}
+.response-actions .response-support-button span{margin-left:0}
+.response-support-button.is-active{border:1px solid #16955b;background:#08783f!important;color:#fff!important}
+.response-support-button.is-active::after{content:"✓";font-size:.64rem}

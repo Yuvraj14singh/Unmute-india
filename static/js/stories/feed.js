@@ -2,10 +2,17 @@
   const csrf=()=>document.querySelector('[name=csrfmiddlewaretoken]')?.value||'';
   const esc=value=>{const node=document.createElement('div');node.textContent=value||'';return node.innerHTML};
   const formatTime=value=>{const seconds=Math.max(0,Math.floor(value||0));return `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`};
+  const applyReactionState=(button,active,count)=>{
+    button.classList.toggle('is-active',active);button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));
+    const icon=button.querySelector('.reaction-icon'),value=button.querySelector('.reaction-count');if(icon)icon.textContent=active?'♥':'♡';if(value)value.textContent=count;
+    const label=button.querySelector('.reaction-label')?.textContent||'Support';button.setAttribute('aria-label',`${label}, ${count} support${count===1?'':'s'}${active?', selected':''}`);
+  };
+  const syncReaction=(target,id,active,count)=>document.querySelectorAll(`[data-reaction-target="${target}"][data-${target==='story'?'story':'response'}-id="${id}"]`).forEach(button=>applyReactionState(button,active,count));
+  const reactionError=button=>{const note=document.createElement('span');note.className='reaction-error';note.setAttribute('role','status');note.textContent='Couldn’t update your support. Please try again.';button.closest('.voice-social,.response-actions')?.append(note);setTimeout(()=>note.remove(),3500)};
 
   document.querySelectorAll('[data-reaction-form]').forEach(form=>form.addEventListener('submit',async event=>{
     event.preventDefault();const button=form.querySelector('button');if(button.disabled)return;button.disabled=true;
-    try{const body=new FormData(form);body.set('json','1');const response=await fetch(form.action,{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},body});const data=await response.json();if(!response.ok)throw Error();button.setAttribute('aria-pressed',String(data.active));button.classList.toggle('active',data.active);button.querySelector('[data-reaction-count]').textContent=data.count}finally{button.disabled=false}
+    try{const body=new FormData(form);body.set('json','1');const response=await fetch(form.action,{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},body});const data=await response.json();if(!response.ok)throw Error();syncReaction('story',button.dataset.storyId,data.active,data.count)}catch{reactionError(button)}finally{button.disabled=false}
   }));
 
   document.querySelectorAll('[data-video-player]').forEach(player=>{
@@ -22,10 +29,11 @@
   });
 
   const overlay=document.querySelector('[data-comments-overlay]');if(!overlay)return;
-  const modal=overlay.querySelector('.comments-modal'),scroll=overlay.querySelector('.comments-scroll'),list=overlay.querySelector('[data-comments-list]'),status=overlay.querySelector('[data-comments-status]'),count=overlay.querySelector('[data-comments-count]'),compose=overlay.querySelector('[data-comment-compose]'),more=overlay.querySelector('[data-comments-more]'),replyBox=overlay.querySelector('[data-reply-context]'),reportSheet=overlay.querySelector('[data-report-sheet]'),reportForm=overlay.querySelector('[data-report-form]');
-  let storyId=null,page=1,lastFocus=null,reportFocus=null,submitting=false,commentsLoading=false,hasMoreComments=false;
+  const modal=overlay.querySelector('.comments-modal'),scroll=overlay.querySelector('.comments-scroll'),list=overlay.querySelector('[data-comments-list]'),status=overlay.querySelector('[data-comments-status]'),count=overlay.querySelector('[data-comments-count]'),compose=overlay.querySelector('[data-comment-compose]'),more=overlay.querySelector('[data-comments-more]'),replyBox=overlay.querySelector('[data-reply-context]'),reportSheet=overlay.querySelector('[data-report-sheet]'),reportForm=overlay.querySelector('[data-report-form]'),nameSheet=overlay.querySelector('[data-name-sheet]'),nameForm=overlay.querySelector('[data-name-form]'),nameInput=overlay.querySelector('[data-name-input]'),nameValue=compose.querySelector('[data-display-name-value]'),nameOpen=compose.querySelector('[data-name-open]');
+  let storyId=null,page=1,lastFocus=null,reportFocus=null,nameFocus=null,submitting=false,commentsLoading=false,hasMoreComments=false;
 
-  const responseMarkup=comment=>`<article class="response" data-comment="${comment.id}"><div class="response-main"><div class="response-avatar" aria-hidden="true">${esc(comment.name).charAt(0).toUpperCase()||'A'}</div><div class="response-content"><header><b>${esc(comment.name)}</b><time>${esc(comment.created)}</time></header><p>${esc(comment.body)}</p><div class="response-actions"><button data-comment-like="${comment.id}" aria-pressed="false">♡ Support <span>${comment.likes}</span></button><button data-reply="${comment.id}" data-reply-name="${esc(comment.name)}">Reply</button><button data-report="${comment.id}">Report</button></div></div></div>${comment.replies.length?`<div class="reply-thread">${comment.replies.map(reply=>`<article class="reply" data-comment="${reply.id}"><div class="response-avatar" aria-hidden="true">${esc(reply.name).charAt(0).toUpperCase()||'A'}</div><div class="response-content"><header><b>${esc(reply.name)}</b><time>${esc(reply.created)}</time></header><p>${esc(reply.body)}</p><div class="response-actions"><button data-comment-like="${reply.id}" aria-pressed="false">♡ Support <span>${reply.likes}</span></button><span class="reply-thread-label">Thread reply</span><button data-report="${reply.id}">Report</button></div></div></article>`).join('')}</div>`:''}</article>`;
+  const supportButton=item=>`<button class="response-support-button${item.active?' is-active active':''}" data-comment-like="${item.id}" data-reaction-target="response" data-response-id="${item.id}" aria-pressed="${item.active?'true':'false'}" aria-label="Support, ${item.likes} support${item.likes===1?'':'s'}${item.active?', selected':''}"><span class="reaction-icon" aria-hidden="true">${item.active?'♥':'♡'}</span><span class="reaction-label">Support</span><span class="reaction-count" aria-live="polite">${item.likes}</span></button>`;
+  const responseMarkup=comment=>`<article class="response" data-comment="${comment.id}"><div class="response-main"><div class="response-avatar" aria-hidden="true">${esc(comment.name).charAt(0).toUpperCase()||'A'}</div><div class="response-content"><header><b>${esc(comment.name)}</b><time>${esc(comment.created)}</time></header><p>${esc(comment.body)}</p><div class="response-actions">${supportButton(comment)}<button data-reply="${comment.id}" data-reply-name="${esc(comment.name)}">Reply</button><button data-report="${comment.id}">Report</button></div></div></div>${comment.replies.length?`<div class="reply-thread">${comment.replies.map(reply=>`<article class="reply" data-comment="${reply.id}"><div class="response-avatar" aria-hidden="true">${esc(reply.name).charAt(0).toUpperCase()||'A'}</div><div class="response-content"><header><b>${esc(reply.name)}</b><time>${esc(reply.created)}</time></header><p>${esc(reply.body)}</p><div class="response-actions">${supportButton(reply)}<span class="reply-thread-label">Thread reply</span><button data-report="${reply.id}">Report</button></div></div></article>`).join('')}</div>`:''}</article>`;
 
   async function load(reset=false){
     if(commentsLoading||(!reset&&!hasMoreComments))return;
@@ -47,20 +55,26 @@
   }
   function cancelReply(){compose.querySelector('[name=parent]').value='';replyBox.hidden=true;replyBox.querySelector('[data-reply-name]').textContent='Anonymous student'}
   function open(button){lastFocus=button;storyId=button.dataset.story;setContext(button);cancelReply();overlay.hidden=false;document.body.classList.add('modal-open');overlay.querySelector('[data-comments-close]').focus();load(true)}
-  function close(){if(!reportSheet.hidden){closeReport();return}overlay.hidden=true;document.body.classList.remove('modal-open');cancelReply();lastFocus?.focus()}
+  function close(){if(!nameSheet.hidden){closeName();return}if(!reportSheet.hidden){closeReport();return}overlay.hidden=true;document.body.classList.remove('modal-open');cancelReply();lastFocus?.focus()}
   function openReport(button){reportFocus=button;reportForm.reset();reportForm.comment_id.value=button.dataset.report;reportSheet.hidden=false;reportSheet.querySelector('input[name=reason]').focus()}
   function closeReport(){reportSheet.hidden=true;reportFocus?.focus()}
+  function openName(){nameFocus=document.activeElement;nameInput.value=nameValue.value;nameSheet.hidden=false;nameInput.focus();nameInput.select()}
+  function closeName(){nameSheet.hidden=true;nameFocus?.focus()}
+  function syncName(value=''){nameValue.value=value.trim().slice(0,80);nameOpen.textContent=nameValue.value?`Posting as ${nameValue.value} · Change`:'Choose display name'}
 
   document.addEventListener('click',async event=>{
     const opener=event.target.closest('[data-comments-open]');if(opener)return open(opener);
     if(event.target.closest('[data-comments-close]')||event.target===overlay)return close();
     if(event.target.closest('[data-reply-cancel]'))return cancelReply();
     const reply=event.target.closest('[data-reply]');if(reply){compose.querySelector('[name=parent]').value=reply.dataset.reply;replyBox.hidden=false;replyBox.querySelector('[data-reply-name]').textContent=reply.dataset.replyName||'Anonymous student';compose.querySelector('[name=body]').focus();return}
-    const like=event.target.closest('[data-comment-like]');if(like){if(like.disabled)return;like.disabled=true;const old=Number(like.querySelector('span').textContent);const wasActive=like.getAttribute('aria-pressed')==='true';like.setAttribute('aria-pressed',String(!wasActive));like.querySelector('span').textContent=String(old+(wasActive?-1:1));try{const response=await fetch(`/comments/${like.dataset.commentLike}/react/`,{method:'POST',headers:{'X-CSRFToken':csrf()}});const data=await response.json();if(!response.ok)throw Error();like.setAttribute('aria-pressed',String(data.active));like.querySelector('span').textContent=data.count;like.firstChild.textContent=`${data.active?'♥':'♡'} Support `}catch{like.setAttribute('aria-pressed',String(wasActive));like.querySelector('span').textContent=old}finally{like.disabled=false}return}
+    const like=event.target.closest('[data-comment-like]');if(like){if(like.disabled)return;event.stopPropagation();like.disabled=true;try{const response=await fetch(`/comments/${like.dataset.commentLike}/react/`,{method:'POST',headers:{'X-CSRFToken':csrf()}});const data=await response.json();if(!response.ok)throw Error();syncReaction('response',like.dataset.commentLike,data.active,data.count)}catch{reactionError(like)}finally{like.disabled=false}return}
     const report=event.target.closest('[data-report]');if(report)return openReport(report);
     if(event.target.closest('[data-report-close]'))return closeReport();
+    if(event.target.closest('[data-name-open]'))return openName();
+    if(event.target.closest('[data-name-close]'))return closeName();
+    if(event.target.closest('[data-name-clear]')){syncName('');closeName();return}
   });
-  overlay.querySelector('[data-name-toggle]').addEventListener('click',event=>{const row=overlay.querySelector('[data-name-row]'),show=row.hidden;row.hidden=!show;event.currentTarget.setAttribute('aria-expanded',String(show));event.currentTarget.textContent=show?'Hide display name':'Add display name';if(show)row.querySelector('input').focus()});
+  nameForm.addEventListener('submit',event=>{event.preventDefault();syncName(nameInput.value);closeName()});
   more.addEventListener('click',()=>{if(!hasMoreComments||commentsLoading)return;page++;load()});
   const composeBody=compose.querySelector('[name=body]');
   composeBody.addEventListener('input',()=>{composeBody.style.height='auto';composeBody.style.height=`${Math.min(composeBody.scrollHeight,112)}px`});
@@ -69,6 +83,6 @@
   reportForm.addEventListener('submit',async event=>{event.preventDefault();const button=reportForm.querySelector('[type=submit]');button.disabled=true;try{const body=new FormData(reportForm);const id=body.get('comment_id');body.delete('comment_id');const response=await fetch(`/comments/${id}/report/`,{method:'POST',headers:{'X-CSRFToken':csrf()},body});const data=await response.json();if(!response.ok)throw Error();closeReport();status.textContent=data.message}catch{reportSheet.querySelector('p').textContent='The report could not be sent. Please try again.'}finally{button.disabled=false}});
   document.addEventListener('keydown',event=>{
     if(event.key==='Escape'&&!overlay.hidden)return close();
-    if(event.key==='Tab'&&!overlay.hidden){const scope=reportSheet.hidden?modal:reportSheet;const focusable=[...scope.querySelectorAll('button:not([hidden]):not([disabled]),input:not([hidden]),textarea,a[href]')].filter(node=>node.offsetParent!==null);if(!focusable.length)return;if(event.shiftKey&&document.activeElement===focusable[0]){event.preventDefault();focusable.at(-1).focus()}else if(!event.shiftKey&&document.activeElement===focusable.at(-1)){event.preventDefault();focusable[0].focus()}}
+    if(event.key==='Tab'&&!overlay.hidden){const scope=!nameSheet.hidden?nameSheet:reportSheet.hidden?modal:reportSheet;const focusable=[...scope.querySelectorAll('button:not([hidden]):not([disabled]),input:not([hidden]),textarea,a[href]')].filter(node=>node.offsetParent!==null);if(!focusable.length)return;if(event.shiftKey&&document.activeElement===focusable[0]){event.preventDefault();focusable.at(-1).focus()}else if(!event.shiftKey&&document.activeElement===focusable.at(-1)){event.preventDefault();focusable[0].focus()}}
   });
 })();

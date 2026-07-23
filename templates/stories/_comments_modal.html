@@ -17,13 +17,23 @@
     <form class="comments-composer" data-comment-compose>
       {% csrf_token %}
       <input type="hidden" name="parent">
+      <input type="hidden" name="display_name" data-display-name-value>
       <div class="reply-context" data-reply-context hidden><span>Replying to <b data-reply-name>Anonymous student</b></span><button type="button" data-reply-cancel>Cancel</button></div>
-      <div class="display-name-row" data-name-row hidden><label for="comments-display-name">Display name <small>optional</small></label><input id="comments-display-name" name="display_name" maxlength="80" autocomplete="nickname" placeholder="Name shown with this response"></div>
       <div class="composer-row">
         <textarea name="body" rows="1" minlength="3" maxlength="800" required placeholder="Write a supportive response…" aria-label="Write a supportive response"></textarea>
         <button class="composer-send" type="submit"><span>Send</span></button>
       </div>
-      <div class="composer-meta"><button type="button" data-name-toggle aria-expanded="false">Add display name</button><label><input type="checkbox" name="guidelines" required> I’ll keep this supportive and protect privacy.</label></div>
+      <div class="composer-meta"><button type="button" data-name-open aria-haspopup="dialog">Choose display name</button><label><input type="checkbox" name="guidelines" required> I’ll keep this supportive and protect privacy.</label></div>
+    </form>
+  </section>
+  <section class="name-sheet" data-name-sheet role="dialog" aria-modal="true" aria-labelledby="name-sheet-title" hidden>
+    <header><div><span>OPTIONAL</span><h3 id="name-sheet-title">Choose a display name</h3></div><button type="button" data-name-close aria-label="Close display name dialog">×</button></header>
+    <p>This name appears beside your response. You can use a first name, nickname or remain anonymous.</p>
+    <form data-name-form>
+      <label for="comments-display-name">Display name</label>
+      <input id="comments-display-name" data-name-input maxlength="80" autocomplete="nickname" placeholder="For example: A student">
+      <small>Do not include your phone number, email or other private details.</small>
+      <div><button type="button" data-name-clear>Stay anonymous</button><button class="pill" type="submit">Use this name</button></div>
     </form>
   </section>
   <section class="report-sheet" data-report-sheet role="dialog" aria-modal="true" aria-labelledby="report-title" hidden>
