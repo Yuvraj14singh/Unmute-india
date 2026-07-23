@@ -321,6 +321,8 @@ class UnmutedVoicesUpgradeTests(TestCase):
         self.assertIn('-webkit-line-clamp: 2',css)
         self.assertIn('-webkit-line-clamp: 4',css)
         self.assertNotIn('min-height: 100vh',css)
+        self.assertNotIn(':has(',css)
+        self.assertIn('grid-template-columns: minmax(0, 1fr) !important',css)
 
     def test_missing_media_story_does_not_render(self):
         missing=Story.objects.create(slug='missing-audio',title='Broken audio card',body='No media',story_format='voice',approved=True,moderation_status='published',public_consent=True,privacy_review_complete=True)

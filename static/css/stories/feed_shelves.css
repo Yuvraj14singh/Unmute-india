@@ -47,8 +47,7 @@
   transform: translateX(4px);
 }
 
-.story-grid--shelf,
-.story-grid--shelf:has(.video-story-card) {
+.featured-feed .story-grid--shelf {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: start;
   gap: 1rem;
@@ -147,15 +146,13 @@
 }
 
 @media (max-width: 1399px) {
-  .story-grid--shelf,
-  .story-grid--shelf:has(.video-story-card) {
+  .featured-feed .story-grid--shelf {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 1023px) {
-  .story-grid--shelf,
-  .story-grid--shelf:has(.video-story-card) {
+  .featured-feed .story-grid--shelf {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -166,8 +163,45 @@
     flex-direction: column;
   }
 
-  .story-grid--shelf,
-  .story-grid--shelf:has(.video-story-card) {
+  .featured-feed .story-grid--shelf {
     grid-template-columns: 1fr;
+  }
+}
+
+/* iOS Safari fallback: never allow an inherited desktop grid on phones. */
+@media (max-width: 699px) {
+  .featured-feed .format-shelf .story-grid--shelf {
+    display: grid;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-items: start;
+  }
+
+  .featured-feed .story-grid--shelf .story-card {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .story-card .story-meta {
+    gap: .65rem;
+    align-items: flex-start;
+  }
+
+  .story-card .story-meta span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .story-grid--shelf .voice-social {
+    display: flex;
+    width: 100%;
+    gap: .45rem;
+  }
+
+  .story-grid--shelf .voice-social form,
+  .story-grid--shelf .voice-social > button {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 }
