@@ -182,20 +182,34 @@ def petition_detail(request, slug):
         hero_image_url = static(
             'images/accountability/dharmendra-pradhan-resign.png'
         )
+        social_image_path = static(
+            'images/accountability/dharmendra-pradhan-resign-social.jpg'
+        )
+        social_image_type = 'image/jpeg'
+        social_image_width = 1200
+        social_image_height = 630
     elif petition.cover_image:
         hero_image_url = petition.cover_image.url
+        social_image_path = hero_image_url
+        social_image_type = mimetypes.guess_type(hero_image_url)[0] or 'image/jpeg'
+        social_image_width = None
+        social_image_height = None
     else:
         hero_image_url = ''
+        social_image_path = ''
+        social_image_type = ''
+        social_image_width = None
+        social_image_height = None
     social_image_url = (
-        request.build_absolute_uri(f'{hero_image_url}?v=20260723')
-        if hero_image_url
+        request.build_absolute_uri(f'{social_image_path}?v=20260724')
+        if social_image_path
         else ''
     )
     missing_verification_settings = _missing_google_support_settings()
     verification_available = not missing_verification_settings
     if not verification_available:
         logger.error('Google petition support disabled: missing environment variables: %s.', ', '.join(missing_verification_settings))
-    return render(request, 'accountability/petition_detail.html', {'petition':petition,'form':form,'verified_count':petition.verified_count,'supporters':supporters,'related_petitions':related,'canonical_url':canonical_url,'hero_image_url':hero_image_url,'social_image_url':social_image_url,'google_client_id':settings.GOOGLE_CLIENT_ID,'turnstile_site_key':settings.TURNSTILE_SITE_KEY,'verification_available':verification_available,'google_support_url':reverse('google_petition_support', args=[petition.slug])})
+    return render(request, 'accountability/petition_detail.html', {'petition':petition,'form':form,'verified_count':petition.verified_count,'supporters':supporters,'related_petitions':related,'canonical_url':canonical_url,'hero_image_url':hero_image_url,'social_image_url':social_image_url,'social_image_type':social_image_type,'social_image_width':social_image_width,'social_image_height':social_image_height,'google_client_id':settings.GOOGLE_CLIENT_ID,'turnstile_site_key':settings.TURNSTILE_SITE_KEY,'verification_available':verification_available,'google_support_url':reverse('google_petition_support', args=[petition.slug])})
 
 
 @require_POST

@@ -129,6 +129,19 @@ class PetitionSystemTests(TestCase):
         data={'name':'Student','supporter_type':'student','consent':'on','credential':'raw-google-token','turnstile_token':'turnstile-token'}
         data.update(overrides); return data
 
+    def test_featured_petition_uses_whatsapp_compatible_social_image(self):
+        petition=Petition.objects.get(slug='demand-resignation-dharmendra-pradhan')
+        petition.petition_status='published'
+        petition.save(update_fields=('petition_status','updated_at'))
+        response=self.client.get(petition.get_absolute_url())
+        self.assertContains(response,'dharmendra-pradhan-resign-social.jpg')
+        self.assertContains(response,'property="og:image:type" content="image/jpeg"')
+        self.assertContains(response,'property="og:image:width" content="1200"')
+        self.assertContains(response,'property="og:image:height" content="630"')
+        image=Path('static/images/accountability/dharmendra-pradhan-resign-social.jpg')
+        self.assertTrue(image.exists())
+        self.assertLess(image.stat().st_size,400 * 1024)
+
     @property
     def support_url(self): return reverse('google_petition_support',args=[self.petition.slug])
 
