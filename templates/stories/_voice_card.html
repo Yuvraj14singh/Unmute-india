@@ -8,8 +8,7 @@
     {% if story.story_format == 'text' %}
       <p>{{ story.body|truncatewords:32 }}</p>
     {% elif story.story_format == 'voice' and story.public_media %}
-      <audio controls preload="metadata" src="{{ story.public_media.url }}" data-guarded-media></audio>
-      <p class="story-media-missing" data-media-error hidden>This audio is no longer available.</p>
+      {% include 'stories/_audio_player.html' with audio_src=story.public_media.url %}
     {% elif story.story_format == 'video' and story.public_media %}
       <div class="video-card-player" data-video-player>
         <video preload="metadata" playsinline muted src="{{ story.public_media.url }}" data-guarded-media{% if story.thumbnail %} poster="{{ story.thumbnail.url }}"{% endif %}></video>

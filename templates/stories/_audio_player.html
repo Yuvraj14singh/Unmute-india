@@ -1,0 +1,11 @@
+<div class="public-audio" data-public-audio>
+  <audio preload="metadata" src="{{ audio_src }}" data-guarded-media></audio>
+  <button class="public-audio__play" type="button" data-audio-play aria-label="Play audio"><span>▶</span></button>
+  <div class="public-audio__main">
+    <div class="public-audio__label"><span data-audio-state>Ready to listen</span><time><b data-audio-current>0:00</b> / <span data-audio-duration>--:--</span></time></div>
+    <input class="public-audio__progress" type="range" min="0" max="1000" value="0" step="1" data-audio-progress aria-label="Audio progress">
+    <div class="public-audio__wave" aria-hidden="true">{% for _ in "123456789012345678901234" %}<i></i>{% endfor %}</div>
+  </div>
+  <button class="public-audio__mute" type="button" data-audio-mute aria-label="Mute audio" aria-pressed="false"><span>♪</span></button>
+</div>
+<p class="story-media-missing" data-media-error hidden>This audio is no longer available.</p>

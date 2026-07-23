@@ -2,6 +2,20 @@
   const csrf=()=>document.querySelector('[name=csrfmiddlewaretoken]')?.value||'';
   const esc=value=>{const node=document.createElement('div');node.textContent=value||'';return node.innerHTML};
   const formatTime=value=>{const seconds=Math.max(0,Math.floor(value||0));return `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`};
+  const audioMarkup=src=>`<div class="public-audio public-audio--compact" data-public-audio><audio preload="metadata" src="${esc(src)}" data-guarded-media></audio><button class="public-audio__play" type="button" data-audio-play aria-label="Play audio"><span>▶</span></button><div class="public-audio__main"><div class="public-audio__label"><span data-audio-state>Ready to listen</span><time><b data-audio-current>0:00</b> / <span data-audio-duration>--:--</span></time></div><input class="public-audio__progress" type="range" min="0" max="1000" value="0" step="1" data-audio-progress aria-label="Audio progress"><div class="public-audio__wave" aria-hidden="true">${'<i></i>'.repeat(18)}</div></div><button class="public-audio__mute" type="button" data-audio-mute aria-label="Mute audio" aria-pressed="false"><span>♪</span></button></div><p class="story-media-missing" data-media-error hidden>This audio is no longer available.</p>`;
+  const initAudioPlayers=(root=document)=>{
+    root.querySelectorAll('[data-public-audio]:not([data-audio-ready])').forEach(player=>{
+      player.dataset.audioReady='true';
+      const audio=player.querySelector('audio'),play=player.querySelector('[data-audio-play]'),mute=player.querySelector('[data-audio-mute]'),progress=player.querySelector('[data-audio-progress]'),current=player.querySelector('[data-audio-current]'),duration=player.querySelector('[data-audio-duration]'),state=player.querySelector('[data-audio-state]');
+      const sync=()=>{const playing=!audio.paused&&!audio.ended;player.classList.toggle('is-playing',playing);play.querySelector('span').textContent=playing?'Ⅱ':'▶';play.setAttribute('aria-label',playing?'Pause audio':'Play audio');state.textContent=playing?'Now playing':audio.ended?'Finished':'Ready to listen';current.textContent=formatTime(audio.currentTime);if(Number.isFinite(audio.duration)){duration.textContent=formatTime(audio.duration);progress.value=Math.round(audio.currentTime/audio.duration*1000)||0;player.style.setProperty('--audio-progress',`${audio.currentTime/audio.duration*100||0}%`)}};
+      play.addEventListener('click',()=>audio.paused?audio.play().catch(()=>{}):audio.pause());
+      mute.addEventListener('click',()=>{audio.muted=!audio.muted;mute.classList.toggle('is-muted',audio.muted);mute.setAttribute('aria-pressed',String(audio.muted));mute.setAttribute('aria-label',audio.muted?'Unmute audio':'Mute audio');mute.querySelector('span').textContent=audio.muted?'×':'♪'});
+      progress.addEventListener('input',()=>{if(Number.isFinite(audio.duration))audio.currentTime=progress.value/1000*audio.duration});
+      audio.addEventListener('error',()=>{player.hidden=true;const fallback=player.nextElementSibling;if(fallback?.matches('[data-media-error]'))fallback.hidden=false});
+      ['loadedmetadata','durationchange','timeupdate','play','pause','ended'].forEach(name=>audio.addEventListener(name,sync));sync();
+    });
+  };
+  initAudioPlayers();
   document.querySelectorAll('[data-guarded-media]').forEach(media=>{
     media.addEventListener('error',()=>{
       const player=media.closest('[data-video-player]');
@@ -56,7 +70,7 @@
     overlay.querySelector('#comments-title').textContent=button.dataset.title||'Supportive responses';
     overlay.querySelector('[data-comments-author]').textContent=button.dataset.author||'Anonymous student';
     const context=overlay.querySelector('[data-comments-context]'),format=(button.dataset.format||'').toLowerCase(),media=button.dataset.media,excerpt=button.dataset.excerpt;
-    if(format==='voice'&&media)context.innerHTML=`<audio controls preload="metadata" src="${esc(media)}"></audio>`;
+    if(format==='voice'&&media){context.innerHTML=audioMarkup(media);initAudioPlayers(context)}
     else if(format==='video'&&media)context.innerHTML=`<div class="comments-video-context"><video muted preload="metadata" src="${esc(media)}"></video><span>▶ Video message</span></div>`;
     else context.innerHTML=`<p>${esc(excerpt)}</p>`;
     context.hidden=!(media||excerpt);
