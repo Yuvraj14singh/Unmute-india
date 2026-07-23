@@ -504,6 +504,16 @@ class PrivateIdentitySystemTests(TestCase):
         self.assertEqual(invalid.context['active_type'],'text')
         self.assertContains(invalid,'Written title')
 
+    def test_my_space_cards_use_three_column_grid_without_global_footer_collision(self):
+        identity=resolve_google_identity('layout-owner','layout@example.com',consent=True)
+        ListeningRequest.objects.create(kind='text',title='Layout card',message='Body',private_identity=identity)
+        self.attach(self.client,identity)
+        response=self.client.get(reverse('my_space'),{'type':'text'})
+        self.assertContains(response,'class="space-card__footer"')
+        self.assertNotContains(response,'<footer class="space-card__footer"')
+        css=Path('static/css/private_space.css').read_text()
+        self.assertIn('grid-template-columns: repeat(3,minmax(0,1fr))',css)
+
     def test_my_space_card_escapes_html_renders_emoji_and_safe_title_fallback(self):
         identity=resolve_google_identity('render-owner','render@example.com',consent=True)
         ListeningRequest.objects.create(

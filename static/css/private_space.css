@@ -100,7 +100,7 @@
 
 .space-grid {
   display: grid;
-  grid-template-columns: repeat(4,minmax(0,1fr));
+  grid-template-columns: repeat(3,minmax(0,1fr));
   align-items: stretch;
   gap: clamp(1rem,2vw,1.4rem);
 }
@@ -329,10 +329,6 @@
 }
 
 .space-privacy { margin-top: 2rem; color: var(--muted); }
-
-@media (max-width:1279px) {
-  .space-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
-}
 
 @media (max-width:899px) {
   .private-space { width: min(100% - 2rem,1440px); }
