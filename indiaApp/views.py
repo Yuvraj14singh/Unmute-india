@@ -312,7 +312,7 @@ def share(request, kind='text'):
             request.session['last_submission'] = str(item.public_id)
             request.session['last_submission_public_review'] = item.public_sharing_consent
             return redirect('received')
-        messages.error(request, 'Your message could not be sent yet, but what you wrote is still safe. You can try again.')
+        logger.info('ListeningRequest validation blocked kind=%s fields=%s',kind,sorted(form.errors.keys()))
     else: form = ListeningRequestForm(instance=ListeningRequest(kind=kind), initial={'anonymous':True,'wants_reply':True})
     return render(request, f'listening/{kind}_share.html', {'form':form, 'kind':kind})
 

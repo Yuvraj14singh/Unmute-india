@@ -25,6 +25,12 @@ class PublicPageTests(TestCase):
         self.assertFalse(item.public_sharing_consent)
         self.assertEqual(item.publication_status, 'private')
 
+    def test_media_validation_is_shown_locally_without_generic_top_banner(self):
+        response=self.client.post(reverse('share',args=['audio']),{'consent':'on','anonymous':'on'})
+        self.assertEqual(response.status_code,200)
+        self.assertContains(response,'Please record or choose an audio file before submitting.')
+        self.assertNotContains(response,'Your message could not be sent yet')
+
     def test_staff_can_publish_only_an_explicitly_consented_submission(self):
         staff = get_user_model().objects.create_superuser('moderator', 'moderator@example.com', 'safe-test-password')
         consented = ListeningRequest.objects.create(

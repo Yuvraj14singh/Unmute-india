@@ -21,8 +21,11 @@ class ListeningRequestForm(forms.ModelForm):
         cleaned = super().clean()
         cleaned['comment_preference'] = cleaned.get('comment_preference') or 'support'
         media = cleaned.get('media')
+        kind = getattr(self.instance, 'kind', '') or self.data.get('kind', '')
+        if kind in ('audio','video') and not media:
+            article = 'an' if kind == 'audio' else 'a'
+            self.add_error('media', f'Please record or choose {article} {kind} file before submitting.')
         if media:
-            kind = getattr(self.instance, 'kind', '') or self.data.get('kind', '')
             ext = media.name.rsplit('.', 1)[-1].lower() if '.' in media.name else ''
             allowed = {'audio': {'mp3','m4a','wav','ogg','webm'}, 'video': {'webm','mp4','mov'}}
             if kind in allowed and ext not in allowed[kind]:
