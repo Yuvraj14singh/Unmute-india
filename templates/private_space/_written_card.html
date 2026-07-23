@@ -1,0 +1,9 @@
+<article class="space-card space-card--written">
+  <header><span class="space-type">Written</span><span class="space-badge space-badge--{{ item.publication_status }}">{{ item.space_status }}</span></header>
+  <div class="space-card__body">
+    <h3>{{ item.title|default:"Untitled written voice" }}</h3>
+    <p>{{ item.message|default:"No additional message was included." }}</p>
+  </div>
+  {% include 'private_space/_card_footer.html' %}
+</article>
+{% include 'private_space/_submission_dialog.html' %}

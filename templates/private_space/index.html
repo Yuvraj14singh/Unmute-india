@@ -24,18 +24,30 @@
     </article>
     {% if guest_submissions %}<section class="browser-activity"><h2>Saved on this browser</h2><div class="space-grid">{% for item in guest_submissions %}<article class="space-card"><span>{{ item.get_kind_display }}</span><h3>{{ item.title|default:item.message|truncatewords:18|default:"Private submission" }}</h3><time>{{ item.created_at|date:"d M Y" }}</time><p>{{ item.get_publication_status_display }}</p></article>{% endfor %}</div></section>{% endif %}
   {% else %}
-    <section>
-      <h2>My Submissions</h2>
+    <nav class="space-categories" aria-label="Submission categories">
+      <a href="?type=text" {% if active_type == 'text' %}class="active" aria-current="page"{% endif %}>Written Voices</a>
+      <a href="?type=audio" {% if active_type == 'audio' %}class="active" aria-current="page"{% endif %}>Audio Stories</a>
+      <a href="?type=video" {% if active_type == 'video' %}class="active" aria-current="page"{% endif %}>Video Stories</a>
+    </nav>
+    <section class="space-collection">
+      <header>
+        <p class="eyebrow green">ONLY VISIBLE TO YOU</p>
+        <h2>{% if active_type == 'audio' %}My Audio Stories{% elif active_type == 'video' %}My Video Stories{% else %}My Written Voices{% endif %}</h2>
+        <p>Only you can see all of your submissions here. Public visitors see only approved content without private ownership links.</p>
+      </header>
       <div class="space-grid">
       {% for item in submissions %}
-        <article class="space-card">
-          <span>{{ item.get_kind_display }}</span>
-          <h3>{{ item.title|default:item.message|truncatewords:18|default:"Private submission" }}</h3>
-          <time>{{ item.created_at|date:"d M Y" }}</time>
-          <dl><div><dt>Moderation</dt><dd>{{ item.get_status_display }}</dd></div><div><dt>Public visibility</dt><dd>{{ item.get_publication_status_display }}</dd></div>{% if item.published_story.published_at %}<div><dt>Published</dt><dd>{{ item.published_story.published_at|date:"d M Y" }}</dd></div>{% endif %}</dl>
-        </article>
-      {% empty %}<p>No privately linked submissions yet.</p>{% endfor %}
+        {% if item.kind == 'audio' %}{% include 'private_space/_audio_card.html' %}{% elif item.kind == 'video' %}{% include 'private_space/_video_card.html' %}{% else %}{% include 'private_space/_written_card.html' %}{% endif %}
+      {% empty %}
+        <div class="space-empty">
+          <span aria-hidden="true">{% if active_type == 'audio' %}◉{% elif active_type == 'video' %}▷{% else %}✦{% endif %}</span>
+          <h3>No {% if active_type == 'audio' %}audio stories{% elif active_type == 'video' %}video stories{% else %}written voices{% endif %} yet.</h3>
+          <p>Share what you’re feeling, and your submission will appear here privately.</p>
+          <a class="pill saffron" href="{% url 'share' active_type %}">Share {% if active_type == 'audio' %}an audio story{% elif active_type == 'video' %}a video story{% else %}a written voice{% endif %}</a>
+        </div>
+      {% endfor %}
       </div>
+      {% if submissions.paginator.num_pages > 1 %}<nav class="space-pagination" aria-label="My submissions pages">{% if submissions.has_previous %}<a href="?type={{ active_type }}&page={{ submissions.previous_page_number }}">← Previous</a>{% endif %}<span>Page {{ submissions.number }} of {{ submissions.paginator.num_pages }}</span>{% if submissions.has_next %}<a href="?type={{ active_type }}&page={{ submissions.next_page_number }}">Load more →</a>{% endif %}</nav>{% endif %}
     </section>
     <p class="space-privacy">Your public submissions are not linked together as belonging to the same person.</p>
   {% endif %}

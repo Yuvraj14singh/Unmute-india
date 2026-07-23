@@ -1,0 +1,11 @@
+<article class="space-card space-card--audio">
+  <header><span class="space-type">Audio</span><span class="space-badge space-badge--{{ item.publication_status }}">{{ item.space_status }}</span></header>
+  <div class="space-card__body">
+    <h3>{{ item.title|default:"Untitled audio story" }}</h3>
+    {% if item.message %}<p>{{ item.message }}</p>{% endif %}
+    {% if item.media %}<audio controls preload="none" src="{% url 'my_space_media' item.public_id %}">Your browser does not support audio playback.</audio>{% endif %}
+    {% if item.published_story.duration %}<small>Duration {{ item.published_story.duration }}</small>{% endif %}
+  </div>
+  {% include 'private_space/_card_footer.html' %}
+</article>
+{% include 'private_space/_submission_dialog.html' %}

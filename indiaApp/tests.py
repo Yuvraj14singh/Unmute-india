@@ -485,6 +485,85 @@ class PrivateIdentitySystemTests(TestCase):
         submission.refresh_from_db()
         self.assertEqual(submission.private_identity,identity)
 
+    def test_my_space_filters_submission_types_and_invalid_type_is_safe(self):
+        identity=resolve_google_identity('filter-owner','filter@example.com',consent=True)
+        ListeningRequest.objects.create(kind='text',title='Written title',message='Written body',private_identity=identity)
+        ListeningRequest.objects.create(kind='audio',title='Audio title',message='Audio description',private_identity=identity)
+        ListeningRequest.objects.create(kind='video',title='Video title',message='Video description',private_identity=identity)
+        self.attach(self.client,identity)
+        written=self.client.get(reverse('my_space'),{'type':'text'})
+        self.assertContains(written,'Written title')
+        self.assertContains(written,'Written body')
+        self.assertNotContains(written,'Audio title')
+        audio=self.client.get(reverse('my_space'),{'type':'audio'})
+        self.assertContains(audio,'Audio title')
+        self.assertNotContains(audio,'Video title')
+        video=self.client.get(reverse('my_space'),{'type':'video'})
+        self.assertContains(video,'Video title')
+        invalid=self.client.get(reverse('my_space'),{'type':'not-real'})
+        self.assertEqual(invalid.context['active_type'],'text')
+        self.assertContains(invalid,'Written title')
+
+    def test_my_space_card_escapes_html_renders_emoji_and_safe_title_fallback(self):
+        identity=resolve_google_identity('render-owner','render@example.com',consent=True)
+        ListeningRequest.objects.create(
+            kind='text',
+            title='<script>alert(1)</script>',
+            message='Actual message 😡 <img src=x onerror=alert(2)>',
+            private_identity=identity,
+        )
+        ListeningRequest.objects.create(kind='text',title='',message='',private_identity=identity)
+        self.attach(self.client,identity)
+        response=self.client.get(reverse('my_space'),{'type':'text'})
+        self.assertContains(response,'&lt;script&gt;alert(1)&lt;/script&gt;')
+        self.assertNotContains(response,'<script>alert(1)</script>')
+        self.assertContains(response,'Actual message 😡')
+        self.assertContains(response,'Untitled written voice')
+
+    def test_my_space_status_and_published_date_are_consistent(self):
+        identity=resolve_google_identity('status-owner','status@example.com',consent=True)
+        story=self.public_story('published-source')
+        item=ListeningRequest.objects.create(
+            kind='text',title='Published item',message='Body',
+            private_identity=identity,publication_status='published',
+            published_story=story,
+        )
+        self.attach(self.client,identity)
+        response=self.client.get(reverse('my_space'),{'type':'text'})
+        self.assertContains(response,'Published')
+        self.assertContains(response,'Public')
+        self.assertContains(response,timezone.localdate(story.published_at).strftime('%d %b %Y'))
+        self.assertNotContains(response,'>New<')
+
+    def test_my_space_paginates_twelve_per_category(self):
+        identity=resolve_google_identity('page-owner','page@example.com',consent=True)
+        for index in range(13):
+            ListeningRequest.objects.create(kind='text',title=f'Entry {index:02d}',message='Body',private_identity=identity)
+        self.attach(self.client,identity)
+        first=self.client.get(reverse('my_space'),{'type':'text'})
+        self.assertEqual(len(first.context['submissions']),12)
+        self.assertContains(first,'Load more')
+        second=self.client.get(reverse('my_space'),{'type':'text','page':2})
+        self.assertEqual(len(second.context['submissions']),1)
+
+    def test_sign_out_removes_private_submission_access(self):
+        identity=resolve_google_identity('signout-owner','signout@example.com',consent=True)
+        ListeningRequest.objects.create(kind='text',title='Private after signout',message='Body',private_identity=identity)
+        self.attach(self.client,identity)
+        response=self.client.post(reverse('my_space_sign_out'))
+        self.assertRedirects(response,reverse('my_space'))
+        self.assertNotContains(self.client.get(reverse('my_space')),'Private after signout')
+
+    def test_private_media_route_rejects_another_identity(self):
+        owner=resolve_google_identity('media-owner','media-owner@example.com',consent=True)
+        stranger=resolve_google_identity('media-stranger','media-stranger@example.com',consent=True)
+        item=ListeningRequest.objects.create(
+            kind='audio',title='Private audio',media='private/protected.mp3',
+            private_identity=owner,
+        )
+        self.attach(self.client,stranger)
+        self.assertEqual(self.client.get(reverse('my_space_media',args=[item.public_id])).status_code,404)
+
 class UnmutedVoicesUpgradeTests(TestCase):
     def setUp(self):
         self.story=Story.objects.create(slug='public-voice',title='A public voice',body='What someone needed to say.',approved=True,moderation_status='published',public_consent=True,privacy_review_complete=True,published_at=timezone.now())
@@ -581,14 +660,16 @@ class UnmutedVoicesUpgradeTests(TestCase):
         self.assertContains(response,'data-author=')
         self.assertContains(response,'data-excerpt=')
 
-    def test_feed_uses_compact_natural_height_shelves(self):
+    def test_feed_uses_equal_height_aligned_shelves(self):
         response=self.client.get(reverse('stories'))
         self.assertContains(response,'Written Voices')
         self.assertContains(response,'Audio Stories')
         self.assertContains(response,'Video Stories')
         css=Path('static/css/stories/feed_shelves.css').read_text()
-        self.assertIn('height: auto',css)
-        self.assertIn('align-items: start',css)
+        self.assertIn('height: 100%',css)
+        self.assertIn('align-items: stretch',css)
+        self.assertIn('flex-direction: column',css)
+        self.assertIn('margin-top: auto',css)
         self.assertIn('-webkit-line-clamp: 2',css)
         self.assertIn('-webkit-line-clamp: 4',css)
         self.assertNotIn('min-height: 100vh',css)

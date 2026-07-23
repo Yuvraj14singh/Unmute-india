@@ -24,6 +24,7 @@ urlpatterns = [
  path('comments/<int:pk>/report/', views.comment_report, name='comment_report'),
  path('submission/withdraw-consent/', views.withdraw_consent, name='withdraw_consent'),
  path('my-space/', views.my_space, name='my_space'),
+ path('my-space/media/<uuid:public_id>/', views.my_space_media, name='my_space_media'),
  path('my-space/google-sync/', views.my_space_google_sync, name='my_space_google_sync'),
  path('my-space/sign-out/', views.my_space_sign_out, name='my_space_sign_out'),
  path('accountability/', views.accountability, name='accountability'),

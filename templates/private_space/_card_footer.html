@@ -1,0 +1,5 @@
+<footer class="space-card__footer">
+  <time datetime="{{ item.created_at|date:'c' }}">Submitted {{ item.created_at|date:"d M Y" }}</time>
+  <dl><div><dt>Visibility</dt><dd>{{ item.space_visibility }}</dd></div>{% if item.published_story.published_at %}<div><dt>Published</dt><dd>{{ item.published_story.published_at|date:"d M Y" }}</dd></div>{% endif %}</dl>
+  <button type="button" class="space-detail-action" data-space-dialog-open="submission-{{ item.public_id }}">View submission <span>→</span></button>
+</footer>

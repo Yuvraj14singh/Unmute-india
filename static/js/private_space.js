@@ -1,4 +1,16 @@
 document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('[data-space-dialog-open]').forEach(button=>{
+    button.addEventListener('click',()=>{
+      const dialog=document.getElementById(button.dataset.spaceDialogOpen);
+      if(dialog?.showModal) dialog.showModal();
+    });
+  });
+  document.querySelectorAll('.space-dialog').forEach(dialog=>{
+    dialog.querySelector('[data-space-dialog-close]')?.addEventListener('click',()=>dialog.close());
+    dialog.addEventListener('click',event=>{
+      if(event.target===dialog) dialog.close();
+    });
+  });
   const config=window.unmuteMySpace;
   const mount=document.querySelector('#my-space-google');
   if(!config||!mount) return;

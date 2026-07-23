@@ -6,7 +6,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import IntegrityError, transaction
 from django.db.models import BooleanField, Count, Exists, F, Max, OuterRef, Prefetch, Q, Subquery, Value
 from django.core.paginator import Paginator
-from django.http import JsonResponse
+from django.http import FileResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.templatetags.static import static
@@ -15,6 +15,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import ensure_csrf_cookie
 import hashlib, json, logging, secrets
+import mimetypes
 from urllib import parse, request as urllib_request
 from .forms import GooglePetitionSupportForm, ListeningRequestForm, PetitionSignatureForm, PublicQuestionForm, VolunteerForm
 from .models import AccountabilityEvent, AuthorityResponse, AuditLog, CommentReaction, CommentReport, EvidenceDocument, ListeningRequest, Petition, PetitionSignature, PrivateIdentity, PromiseTracker, PublicQuestion, Story, StoryComment, StoryReaction, StudentDemand, SupportResource
@@ -540,16 +541,40 @@ def my_space(request):
     identity=request.private_identity
     guest_submissions=ListeningRequest.objects.none()
     submissions=ListeningRequest.objects.none()
+    active_type=request.GET.get('type','text')
+    if active_type not in {'text','audio','video'}:
+        active_type='text'
     if identity:
         merge_guest_activity(
             identity,
             request.anonymous_reaction_key,
             request.session.get('last_submission'),
         )
-        submissions=identity.submissions.select_related('published_story').only(
+        submission_queryset=identity.submissions.filter(kind=active_type).select_related('published_story').only(
             'public_id','kind','title','message','created_at','status',
-            'publication_status','reviewed_at','published_story__published_at',
+            'publication_status','reviewed_at','media',
+            'published_story__published_at','published_story__duration',
         ).order_by('-created_at')
+        submissions=Paginator(submission_queryset,12).get_page(request.GET.get('page'))
+        for item in submissions.object_list:
+            if item.publication_status == 'published':
+                item.space_status='Published'
+                item.space_visibility='Public'
+            elif item.publication_status == 'review':
+                item.space_status='Pending review'
+                item.space_visibility='Private'
+            elif item.publication_status == 'removed':
+                item.space_status='Removed'
+                item.space_visibility='Not public'
+            elif item.publication_status == 'rejected':
+                item.space_status='Not published'
+                item.space_visibility='Private'
+            elif item.status == 'closed':
+                item.space_status='Not published'
+                item.space_visibility='Private'
+            else:
+                item.space_status='Pending review'
+                item.space_visibility='Private'
         PrivateIdentity.objects.filter(pk=identity.pk).update(last_seen_at=timezone.now())
     else:
         guest_submissions=ListeningRequest.objects.filter(
@@ -559,9 +584,27 @@ def my_space(request):
     return render(request,'private_space/index.html',{
         'identity':identity,
         'submissions':submissions,
+        'active_type':active_type,
         'guest_submissions':guest_submissions,
         'google_client_id':settings.GOOGLE_CLIENT_ID,
     })
+
+def my_space_media(request, public_id):
+    identity=request.private_identity
+    owner_filter=Q(private_identity=identity) if identity else Q(
+        guest_key=request.anonymous_reaction_key,
+        private_identity__isnull=True,
+    )
+    item=get_object_or_404(
+        ListeningRequest.objects.filter(owner_filter).exclude(media=''),
+        public_id=public_id,
+    )
+    content_type=mimetypes.guess_type(item.media.name)[0] or 'application/octet-stream'
+    response=FileResponse(item.media.open('rb'),content_type=content_type)
+    response['Content-Disposition']=f'inline; filename="submission-{item.public_id}"'
+    response['X-Content-Type-Options']='nosniff'
+    response['Cache-Control']='private, no-store'
+    return response
 
 @require_POST
 def my_space_google_sync(request):
